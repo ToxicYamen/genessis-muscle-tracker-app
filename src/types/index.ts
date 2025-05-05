@@ -66,4 +66,36 @@ export type ChartData = {
   name: string;
   value: number;
   target?: number;
+  progress?: number;
 };
+
+export interface HabitData {
+  id: number;
+  name: string;
+  icon: React.ReactNode;
+  target: number;
+  completed: number;
+  streak: number;
+  days: Record<string, number>;
+}
+
+export interface NutritionData {
+  id: number;
+  date: string;
+  calories: number;
+  target: number;
+  protein: number;
+  targetProtein: number;
+  water: number;
+  targetWater: number;
+}
+
+export interface CheckIn {
+  id: number;
+  date: Date;
+  images: string[];
+  notes: string;
+  weight?: number;
+  bodyFat?: number;
+  measurements?: Record<string, number>;
+}

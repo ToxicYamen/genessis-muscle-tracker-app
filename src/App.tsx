@@ -13,6 +13,8 @@ import Measurements from "./pages/Measurements";
 import Strength from "./pages/Strength";
 import Workout from "./pages/Workout";
 import Profile from "./pages/Profile";
+import Gallery from "./pages/Gallery";
+import Habits from "./pages/Habits";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -71,6 +73,22 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Workout />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/gallery" 
+                element={
+                  <ProtectedRoute>
+                    <Gallery />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/habits" 
+                element={
+                  <ProtectedRoute>
+                    <Habits />
                   </ProtectedRoute>
                 } 
               />

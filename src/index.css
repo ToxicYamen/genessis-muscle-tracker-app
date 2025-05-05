@@ -33,7 +33,7 @@
     --input: 0 0% 85%;
     --ring: 0 0% 0%;
 
-    --radius: 0.3rem;
+    --radius: 1.5rem;
 
     --sidebar-background: 0 0% 95%;
     --sidebar-foreground: 0 0% 0%;
@@ -92,6 +92,20 @@
 
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-lg hover:scale-[1.02];
+  }
+  
+  .animate-enter {
+    @apply animate-fade-in;
+  }
+  
+  .stat-container {
+    @apply grid gap-4 p-4 rounded-xl bg-gradient-to-br from-card to-secondary/50;
   }
 }
 
