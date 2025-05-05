@@ -251,7 +251,7 @@ export const milestones: Milestone[] = [
     armSize: 43,
     shoulderSize: 49,
     bodyFat: "14-16%",
-    note: "„Bild 1"-ähnlich"
+    note: "Bild 1-ähnlich"
   },
   {
     age: 22,
