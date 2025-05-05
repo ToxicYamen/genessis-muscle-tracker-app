@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useTrackingData } from "@/contexts/DataContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -284,7 +283,7 @@ const Dashboard = () => {
         <Card className="shadow-md animate-slide-in card-hover">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-medium flex items-center gap-2">
-              <ProteinIcon className="h-4 w-4" />
+              <Utensils className="h-4 w-4" />
               Tägliche Ernährung
             </CardTitle>
           </CardHeader>
