@@ -5,14 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { format, startOfWeek, addDays } from "date-fns";
-import { CalendarIcon, DropletIcon, CircleCheckIcon, ProteinIcon, WaterIcon, PlusIcon } from "lucide-react";
+import { CalendarIcon, DropletIcon, CircleCheckIcon, Utensils, Activity, PlusIcon } from "lucide-react";
 
 // Sample habit data
 const habits = [
   {
     id: 1,
     name: "Protein Shake",
-    icon: <ProteinIcon className="h-5 w-5" />,
+    icon: <Utensils className="h-5 w-5" />,
     target: 2,
     completed: 2,
     streak: 7,
@@ -27,7 +27,7 @@ const habits = [
   {
     id: 2,
     name: "Wasser (2L)",
-    icon: <WaterIcon className="h-5 w-5" />,
+    icon: <DropletIcon className="h-5 w-5" />,
     target: 4,
     completed: 3,
     streak: 5,

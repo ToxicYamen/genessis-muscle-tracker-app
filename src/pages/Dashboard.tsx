@@ -7,7 +7,7 @@ import { BarChart, PieChart, LineChart, Cell, Bar, XAxis, YAxis, Tooltip, Legend
 import { ChartData } from "@/types";
 import { Progress } from "@/components/ui/progress";
 import { ChartContainer, ChartTooltipContent, ChartLegendContent } from "@/components/ui/chart";
-import { CalendarIcon, ChartBarIcon, CircleCheckIcon, CirclePercentIcon, DropletIcon, ProteinIcon, StarIcon, RulerIcon, WeightIcon } from "lucide-react";
+import { CalendarIcon, ChartBarIcon, CircleCheckIcon, CirclePercentIcon, DropletIcon, Utensils, StarIcon, RulerIcon, WeightIcon } from "lucide-react";
 
 const Dashboard = () => {
   const { personalData, muscleGroups, strengthExercises, milestones } = useTrackingData();
