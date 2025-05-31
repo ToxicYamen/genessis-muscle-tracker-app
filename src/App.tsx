@@ -9,6 +9,7 @@ import { DataProvider } from "./contexts/DataContext";
 import Login from "./pages/Login";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
+import BodyTracking from "./pages/BodyTracking";
 import Measurements from "./pages/Measurements";
 import Strength from "./pages/Strength";
 import Workout from "./pages/Workout";
@@ -49,6 +50,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Dashboard />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/body-tracking" 
+                element={
+                  <ProtectedRoute>
+                    <BodyTracking />
                   </ProtectedRoute>
                 } 
               />

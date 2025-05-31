@@ -6,20 +6,27 @@ import { BarChart, PieChart, LineChart, Cell, Bar, XAxis, YAxis, Tooltip, Legend
 import { ChartData } from "@/types";
 import { Progress } from "@/components/ui/progress";
 import { ChartContainer, ChartTooltipContent, ChartLegendContent } from "@/components/ui/chart";
-import { CalendarIcon, ChartBarIcon, CircleCheckIcon, CirclePercentIcon, DropletIcon, Utensils, StarIcon, RulerIcon, WeightIcon } from "lucide-react";
+import { CalendarIcon, ChartBarIcon, CircleCheckIcon, CirclePercentIcon, DropletIcon, Utensils, StarIcon, RulerIcon, WeightIcon, ClockIcon } from "lucide-react";
 
 const Dashboard = () => {
   const { personalData, muscleGroups, strengthExercises, milestones } = useTrackingData();
-  const [selectedYear, setSelectedYear] = useState<number>(19); // Default to first year (age 19)
+  const [selectedYear, setSelectedYear] = useState<number>(19);
+
+  // Calculate weeks remaining until end of 4-year plan
+  const startDate = new Date(2025, 6, 1); // July 1, 2025
+  const endDate = new Date(2029, 6, 1); // July 1, 2029
+  const currentDate = new Date();
+  
+  const totalWeeks = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 7));
+  const weeksElapsed = Math.ceil((currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 7));
+  const weeksRemaining = Math.max(0, totalWeeks - weeksElapsed);
+  const yearProgress = Math.min(100, Math.max(0, Math.round((weeksElapsed / totalWeeks) * 100)));
 
   // Find current milestone based on selected year
   const currentMilestone = milestones.find(m => m.age === selectedYear);
   
-  // Calculate current age progress (assuming 4-year plan, starting at age 19)
-  const currentAge = personalData.age;
-  const startAge = 19;
-  const endAge = 22;
-  const ageProgress = Math.min(100, Math.max(0, Math.round(((currentAge - startAge) / (endAge - startAge)) * 100)));
+  // Calculate current year progress (which year of the 4-year plan)
+  const currentPlanYear = Math.min(4, Math.max(1, Math.ceil(weeksElapsed / 52)));
   
   // Prepare data for muscle growth chart
   const muscleChartData: ChartData[] = muscleGroups.map(group => {
@@ -28,7 +35,6 @@ const Dashboard = () => {
       ? group.measurements[group.measurements.length - 1].value 
       : 0;
       
-    // Calculate progress percentage toward goal
     const targetValue = goal ? goal.targetValue : 0;
     const progressPercentage = targetValue > 0 
       ? Math.min(100, Math.round((latestMeasurement / targetValue) * 100)) 
@@ -48,21 +54,20 @@ const Dashboard = () => {
       ? exercise.records[exercise.records.length - 1].value 
       : 0;
     
-    // Calculate progress percentage toward goal
     const targetValue = exercise.naturalTarget;
     const progressPercentage = targetValue > 0 
       ? Math.min(100, Math.round((latestRecord / targetValue) * 100)) 
       : 0;
     
     return {
-      name: exercise.name.split(' ')[0], // First word only for better display
+      name: exercise.name.split(' ')[0],
       value: latestRecord,
       target: exercise.naturalTarget,
       progress: progressPercentage
     };
   });
 
-  // Dummy data for progress tracking over time (would be replaced with real data)
+  // Dummy data for progress tracking over time
   const progressOverTimeData = [
     { month: "Jul 25", weight: 70, muscle: 35, strength: 30 },
     { month: "Aug 25", weight: 72, muscle: 37, strength: 35 },
@@ -72,7 +77,7 @@ const Dashboard = () => {
     { month: "Dec 25", weight: 77, muscle: 42, strength: 48 },
   ];
 
-  // Nutrition tracking data (dummy data for now)
+  // Nutrition tracking data
   const nutritionData = {
     calories: {
       current: 3800,
@@ -111,23 +116,23 @@ const Dashboard = () => {
   ];
 
   // Colors for various charts
-  const COLORS = ["#000000", "#CCCCCC"];
-  const PROGRESS_COLORS = ["#000000", "#333333", "#666666"];
+  const COLORS = ["#ffffff", "#444444"];
+  const PROGRESS_COLORS = ["#ffffff", "#888888", "#444444"];
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Hallo, {personalData.name}</h2>
-          <p className="text-muted-foreground">Alter: {personalData.age} Jahre, Gewicht: {personalData.weight} kg</p>
+          <p className="text-muted-foreground">Jahr {currentPlanYear} von 4 • {weeksRemaining} Wochen verbleibend</p>
         </div>
         
         <Tabs defaultValue="19" onValueChange={(value) => setSelectedYear(parseInt(value))}>
-          <TabsList className="grid grid-cols-4 w-[300px] rounded-full">
-            <TabsTrigger value="19" className="rounded-full">19 Jahre</TabsTrigger>
-            <TabsTrigger value="20" className="rounded-full">20 Jahre</TabsTrigger>
-            <TabsTrigger value="21" className="rounded-full">21 Jahre</TabsTrigger>
-            <TabsTrigger value="22" className="rounded-full">22 Jahre</TabsTrigger>
+          <TabsList className="grid grid-cols-4 w-[300px] rounded-lg">
+            <TabsTrigger value="19" className="rounded-lg">19 Jahre</TabsTrigger>
+            <TabsTrigger value="20" className="rounded-lg">20 Jahre</TabsTrigger>
+            <TabsTrigger value="21" className="rounded-lg">21 Jahre</TabsTrigger>
+            <TabsTrigger value="22" className="rounded-lg">22 Jahre</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -137,22 +142,40 @@ const Dashboard = () => {
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2">
             <StarIcon className="h-5 w-5" />
-            Gesamt-Fortschritt zum 4-Jahre-Ziel
+            4-Jahres-Transformation Progress
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <span className="font-medium">Jahr {currentAge - startAge + 1} von 4</span>
-              <span className="text-sm text-muted-foreground">{ageProgress}%</span>
+              <span className="font-medium">Gesamt-Fortschritt</span>
+              <span className="text-sm text-muted-foreground">{yearProgress}%</span>
             </div>
-            <Progress value={ageProgress} className="h-2.5" />
+            <Progress value={yearProgress} className="h-3" />
             
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 pt-4">
+              <div className="stat-container">
+                <div className="flex items-center gap-2">
+                  <ClockIcon className="h-4 w-4" />
+                  <span className="text-sm font-medium">Wochen verbleibend</span>
+                </div>
+                <span className="text-2xl font-bold">{weeksRemaining}</span>
+                <span className="text-xs text-muted-foreground">von {totalWeeks} Wochen</span>
+              </div>
+              
+              <div className="stat-container">
+                <div className="flex items-center gap-2">
+                  <CalendarIcon className="h-4 w-4" />
+                  <span className="text-sm font-medium">Aktuelles Jahr</span>
+                </div>
+                <span className="text-2xl font-bold">{currentPlanYear}/4</span>
+                <span className="text-xs text-muted-foreground">Juli 2025 - Juli 2029</span>
+              </div>
+              
               <div className="stat-container">
                 <div className="flex items-center gap-2">
                   <WeightIcon className="h-4 w-4" />
-                  <span className="text-sm font-medium">Aktuelles Gewicht</span>
+                  <span className="text-sm font-medium">Gewicht</span>
                 </div>
                 <span className="text-2xl font-bold">{personalData.weight} kg</span>
                 <span className="text-xs text-muted-foreground">Ziel: {currentMilestone?.weight} kg</span>
@@ -161,7 +184,7 @@ const Dashboard = () => {
               <div className="stat-container">
                 <div className="flex items-center gap-2">
                   <RulerIcon className="h-4 w-4" />
-                  <span className="text-sm font-medium">Aktuelle Armgröße</span>
+                  <span className="text-sm font-medium">Armumfang</span>
                 </div>
                 <span className="text-2xl font-bold">
                   {muscleGroups.find(g => g.name === "Bizeps")?.measurements[0]?.value || "?"}
@@ -177,15 +200,6 @@ const Dashboard = () => {
                 </div>
                 <span className="text-2xl font-bold">{personalData.bodyFat}%</span>
                 <span className="text-xs text-muted-foreground">Ziel: {currentMilestone?.bodyFat}</span>
-              </div>
-              
-              <div className="stat-container">
-                <div className="flex items-center gap-2">
-                  <CircleCheckIcon className="h-4 w-4" />
-                  <span className="text-sm font-medium">Profil-Vollständigkeit</span>
-                </div>
-                <span className="text-2xl font-bold">{completionPercentage}%</span>
-                <span className="text-xs text-muted-foreground">3 von 3 Kategorien</span>
               </div>
             </div>
           </div>
@@ -342,8 +356,8 @@ const Dashboard = () => {
                         animationBegin={0}
                         animationDuration={1500}
                       >
-                        <Cell fill="#000000" />
-                        <Cell fill="#CCCCCC" />
+                        <Cell fill="#ffffff" />
+                        <Cell fill="#444444" />
                       </Pie>
                       <Legend />
                     </PieChart>
@@ -373,9 +387,9 @@ const Dashboard = () => {
                   <YAxis />
                   <Tooltip />
                   <Legend />
-                  <Line type="monotone" dataKey="weight" name="Gewicht (kg)" stroke="#000000" activeDot={{ r: 8 }} />
-                  <Line type="monotone" dataKey="muscle" name="Muskelumfang (cm)" stroke="#555555" />
-                  <Line type="monotone" dataKey="strength" name="Kraft (%)" stroke="#999999" />
+                  <Line type="monotone" dataKey="weight" name="Gewicht (kg)" stroke="#ffffff" activeDot={{ r: 8 }} />
+                  <Line type="monotone" dataKey="muscle" name="Muskelumfang (cm)" stroke="#888888" />
+                  <Line type="monotone" dataKey="strength" name="Kraft (%)" stroke="#444444" />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -401,8 +415,8 @@ const Dashboard = () => {
                   <YAxis />
                   <Tooltip />
                   <Legend />
-                  <Bar dataKey="value" name="Aktueller Wert (cm)" fill="#000000" animationBegin={0} animationDuration={1500} />
-                  <Bar dataKey="target" name="Ziel (cm)" fill="#666666" animationBegin={500} animationDuration={1500} />
+                  <Bar dataKey="value" name="Aktueller Wert (cm)" fill="#ffffff" animationBegin={0} animationDuration={1500} />
+                  <Bar dataKey="target" name="Ziel (cm)" fill="#888888" animationBegin={500} animationDuration={1500} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -428,8 +442,8 @@ const Dashboard = () => {
                   <YAxis />
                   <Tooltip />
                   <Legend />
-                  <Bar dataKey="value" name="Aktueller Wert (kg)" fill="#000000" animationBegin={0} animationDuration={1500} />
-                  <Bar dataKey="target" name="Ziel (kg)" fill="#666666" animationBegin={500} animationDuration={1500} />
+                  <Bar dataKey="value" name="Aktueller Wert (kg)" fill="#ffffff" animationBegin={0} animationDuration={1500} />
+                  <Bar dataKey="target" name="Ziel (kg)" fill="#888888" animationBegin={500} animationDuration={1500} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
