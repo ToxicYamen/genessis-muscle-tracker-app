@@ -1,200 +1,235 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { format, startOfWeek, addDays } from "date-fns";
-import { CalendarIcon, DropletIcon, CircleCheckIcon, Utensils, Activity, PlusIcon } from "lucide-react";
-
-// Sample habit data
-const habits = [
-  {
-    id: 1,
-    name: "Protein Shake",
-    icon: <Utensils className="h-5 w-5" />,
-    target: 2,
-    completed: 2,
-    streak: 7,
-    days: {
-      "2025-07-01": 2,
-      "2025-07-02": 2,
-      "2025-07-03": 2,
-      "2025-07-04": 1,
-      "2025-07-05": 2,
-    }
-  },
-  {
-    id: 2,
-    name: "Wasser (2L)",
-    icon: <DropletIcon className="h-5 w-5" />,
-    target: 4,
-    completed: 3,
-    streak: 5,
-    days: {
-      "2025-07-01": 4,
-      "2025-07-02": 4,
-      "2025-07-03": 3,
-      "2025-07-04": 4,
-      "2025-07-05": 3,
-    }
-  },
-  {
-    id: 3,
-    name: "Kreatin",
-    icon: <DropletIcon className="h-5 w-5" />,
-    target: 1,
-    completed: 1,
-    streak: 14,
-    days: {
-      "2025-07-01": 1,
-      "2025-07-02": 1,
-      "2025-07-03": 1,
-      "2025-07-04": 1,
-      "2025-07-05": 1,
-    }
-  },
-  {
-    id: 4,
-    name: "Multivitamin",
-    icon: <CircleCheckIcon className="h-5 w-5" />,
-    target: 1,
-    completed: 0,
-    streak: 0,
-    days: {
-      "2025-07-01": 1,
-      "2025-07-02": 1,
-      "2025-07-03": 1,
-      "2025-07-04": 0,
-      "2025-07-05": 0,
-    }
-  },
-];
-
-// Nutrition tracking data
-const nutritionData = [
-  {
-    id: 1,
-    date: "2025-07-05",
-    calories: 4500,
-    target: 4864,
-    protein: 260,
-    targetProtein: 280,
-    water: 4.2,
-    targetWater: 5,
-  },
-  {
-    id: 2,
-    date: "2025-07-04",
-    calories: 4750,
-    target: 4864,
-    protein: 275,
-    targetProtein: 280,
-    water: 4.5,
-    targetWater: 5,
-  },
-];
+import { de } from "date-fns/locale";
+import { CalendarIcon, DropletIcon, CircleCheckIcon, Utensils, PillIcon, PlusIcon, MinusIcon } from "lucide-react";
+import { storageService, HabitData, NutritionData } from "@/services/storageService";
+import { toast } from "@/components/ui/use-toast";
 
 const Habits = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [habits, setHabits] = useState<HabitData[]>([]);
+  const [nutrition, setNutrition] = useState<NutritionData | null>(null);
+  
   const formattedDate = format(selectedDate, "yyyy-MM-dd");
   
-  // Get today's nutrition data
-  const todayNutrition = nutritionData.find(n => n.date === formattedDate) || nutritionData[0];
-  
-  // Calculate week days for display
-  const weekStartDate = startOfWeek(selectedDate);
-  const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(weekStartDate, i));
-  
-  // Function to increment habit count
-  const incrementHabit = (habitId: number) => {
-    // Would update habit tracking in a real app
-    console.log(`Increment habit: ${habitId} on ${formattedDate}`);
+  useEffect(() => {
+    loadData();
+  }, [selectedDate]);
+
+  const loadData = () => {
+    const habitsData = storageService.getHabits();
+    const nutritionData = storageService.getNutrition(formattedDate);
+    setHabits(habitsData);
+    setNutrition(nutritionData);
   };
+
+  const getIconComponent = (iconName: string) => {
+    const icons = {
+      'Utensils': Utensils,
+      'Droplet': DropletIcon,
+      'Pill': PillIcon,
+      'CircleCheck': CircleCheckIcon
+    };
+    const IconComponent = icons[iconName as keyof typeof icons] || CircleCheckIcon;
+    return <IconComponent className="h-5 w-5" />;
+  };
+
+  const incrementHabit = (habitId: string) => {
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit) return;
+
+    const currentValue = habit.dates[formattedDate] || 0;
+    if (currentValue >= habit.target) {
+      toast({
+        title: "Maximum erreicht",
+        description: `Du hast bereits das Tagesziel für ${habit.name} erreicht!`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const newValue = currentValue + 1;
+    storageService.updateHabitProgress(habitId, formattedDate, newValue);
+    loadData();
+    
+    toast({
+      title: "Habit aktualisiert",
+      description: `${habit.name}: ${newValue}/${habit.target}`,
+    });
+  };
+
+  const decrementHabit = (habitId: string) => {
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit) return;
+
+    const currentValue = habit.dates[formattedDate] || 0;
+    if (currentValue <= 0) return;
+
+    const newValue = currentValue - 1;
+    storageService.updateHabitProgress(habitId, formattedDate, newValue);
+    loadData();
+    
+    toast({
+      title: "Habit aktualisiert",
+      description: `${habit.name}: ${newValue}/${habit.target}`,
+    });
+  };
+
+  const addNutrition = (type: 'calories' | 'protein' | 'water', amount: number) => {
+    if (!nutrition) return;
+    
+    storageService.addNutritionValue(formattedDate, type, amount);
+    loadData();
+    
+    const labels = {
+      calories: 'Kalorien',
+      protein: 'Protein',
+      water: 'Wasser'
+    };
+    
+    toast({
+      title: "Ernährung aktualisiert",
+      description: `+${amount} ${labels[type]} hinzugefügt`,
+    });
+  };
+
+  const subtractNutrition = (type: 'calories' | 'protein' | 'water', amount: number) => {
+    if (!nutrition) return;
+    
+    const currentValue = nutrition[type];
+    const newAmount = Math.max(0, currentValue - amount);
+    const actualSubtracted = currentValue - newAmount;
+    
+    if (actualSubtracted > 0) {
+      storageService.addNutritionValue(formattedDate, type, -actualSubtracted);
+      loadData();
+      
+      const labels = {
+        calories: 'Kalorien',
+        protein: 'Protein',
+        water: 'Wasser'
+      };
+      
+      toast({
+        title: "Ernährung aktualisiert",
+        description: `-${actualSubtracted} ${labels[type]} entfernt`,
+      });
+    }
+  };
+
+  const weekStartDate = startOfWeek(selectedDate, { weekStartsOn: 1 });
+  const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(weekStartDate, i));
   
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Habit Tracker</h2>
+          <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-transparent">
+            Habit Tracker
+          </h2>
           <p className="text-muted-foreground">Verfolge deine täglichen Habits und Ernährung</p>
         </div>
         
         <div className="flex items-center gap-2">
-          <Button variant="outline" className="flex items-center gap-2 rounded-full">
+          <Button variant="outline" className="flex items-center gap-2 rounded-full glass-card">
             <CalendarIcon className="h-4 w-4" />
-            {format(selectedDate, "EEEE, dd.MM.yyyy", { locale: require("date-fns/locale/de") })}
+            {format(selectedDate, "EEEE, dd.MM.yyyy", { locale: de })}
           </Button>
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <Card className="shadow-md animate-slide-in card-hover">
+        <Card className="glass-card card-hover animate-slide-in">
           <CardHeader className="pb-3">
-            <CardTitle>Tägliche Habits</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <div className="h-2 w-2 bg-primary rounded-full animate-pulse"></div>
+              Tägliche Habits
+            </CardTitle>
             <CardDescription>Ergänzungen und Routinen</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {habits.map(habit => {
-                const completion = Math.round((habit.completed / habit.target) * 100);
-                const dateKey = format(selectedDate, "yyyy-MM-dd");
-                const todayCompleted = habit.days[dateKey] || 0;
-                const todayCompletion = Math.round((todayCompleted / habit.target) * 100);
+              {habits.map((habit, index) => {
+                const todayCompleted = habit.dates[formattedDate] || 0;
+                const completion = Math.round((todayCompleted / habit.target) * 100);
                 
                 return (
-                  <div key={habit.id} className="bg-accent/50 rounded-xl p-4 animate-fade-in">
-                    <div className="flex items-center justify-between">
+                  <div 
+                    key={habit.id} 
+                    className="glass-card rounded-xl p-4 animate-scale-in border border-primary/20"
+                    style={{ animationDelay: `${index * 0.1}s` }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <div className="bg-background rounded-full p-2">
-                          {habit.icon}
+                        <div className="bg-primary/20 rounded-full p-2 border border-primary/30">
+                          {getIconComponent(habit.icon)}
                         </div>
                         <div>
-                          <h3 className="font-medium">{habit.name}</h3>
+                          <h3 className="font-medium text-foreground">{habit.name}</h3>
                           <p className="text-xs text-muted-foreground">
                             {todayCompleted} von {habit.target} • Streak: {habit.streak} Tage
                           </p>
                         </div>
                       </div>
-                      <Button 
-                        onClick={() => incrementHabit(habit.id)}
-                        variant="outline" 
-                        size="icon" 
-                        className="h-8 w-8 rounded-full"
-                        disabled={todayCompleted >= habit.target}
-                      >
-                        <PlusIcon className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    
-                    <div className="mt-3">
-                      <div className="flex justify-between items-center text-xs mb-1">
-                        <span>Heute</span>
-                        <span>{todayCompletion}%</span>
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          onClick={() => decrementHabit(habit.id)}
+                          variant="outline" 
+                          size="icon" 
+                          className="h-8 w-8 rounded-full border-destructive/30 hover:bg-destructive/10"
+                          disabled={todayCompleted <= 0}
+                        >
+                          <MinusIcon className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          onClick={() => incrementHabit(habit.id)}
+                          variant="outline" 
+                          size="icon" 
+                          className="h-8 w-8 rounded-full border-primary/30 hover:bg-primary/10"
+                          disabled={todayCompleted >= habit.target}
+                        >
+                          <PlusIcon className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <Progress value={todayCompletion} className="h-2" />
                     </div>
                     
-                    <div className="mt-4 flex justify-between">
+                    <div className="mb-4">
+                      <div className="flex justify-between items-center text-xs mb-2">
+                        <span>Fortschritt heute</span>
+                        <span className="font-medium">{completion}%</span>
+                      </div>
+                      <Progress 
+                        value={completion} 
+                        className="h-3 bg-muted border border-primary/20" 
+                      />
+                    </div>
+                    
+                    <div className="flex justify-between gap-1">
                       {weekDays.map((day, i) => {
                         const dayKey = format(day, "yyyy-MM-dd");
-                        const completed = habit.days[dayKey] || 0;
-                        const percentage = Math.round((completed / habit.target) * 100);
+                        const completed = habit.dates[dayKey] || 0;
                         const isToday = dayKey === format(new Date(), "yyyy-MM-dd");
+                        const isSelected = dayKey === formattedDate;
                         
                         return (
                           <div key={i} className="flex flex-col items-center">
                             <span className="text-xs text-muted-foreground mb-1">
-                              {format(day, "E", { locale: require("date-fns/locale/de") })}
+                              {format(day, "E", { locale: de })}
                             </span>
                             <div 
-                              className={`h-8 w-8 rounded-full flex items-center justify-center text-xs
+                              className={`h-8 w-8 rounded-full flex items-center justify-center text-xs transition-all
                                 ${completed >= habit.target 
-                                  ? "bg-primary text-primary-foreground" 
+                                  ? "bg-primary text-primary-foreground border-2 border-primary/50" 
                                   : completed > 0 
-                                    ? "bg-accent border border-primary/30" 
-                                    : "bg-accent"}
-                                ${isToday ? "ring-2 ring-primary" : ""}
+                                    ? "bg-primary/30 border-2 border-primary/50 text-primary-foreground" 
+                                    : "bg-muted border-2 border-border"}
+                                ${isToday ? "ring-2 ring-blue-400 ring-offset-2 ring-offset-background" : ""}
+                                ${isSelected ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}
                               `}
                             >
                               {completed > 0 ? completed : "-"}
@@ -206,84 +241,232 @@ const Habits = () => {
                   </div>
                 );
               })}
-              
-              <Button variant="outline" className="w-full rounded-xl">
-                <PlusIcon className="h-4 w-4 mr-2" />
-                Neuer Habit
-              </Button>
             </div>
           </CardContent>
         </Card>
         
-        <Card className="shadow-md animate-slide-in card-hover">
+        <Card className="glass-card card-hover animate-slide-in" style={{ animationDelay: "0.2s" }}>
           <CardHeader className="pb-3">
-            <CardTitle>Ernährungstracker</CardTitle>
-            <CardDescription>Kalorien, Protein und Wasser für {format(selectedDate, "dd.MM.yyyy")}</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <div className="h-2 w-2 bg-blue-400 rounded-full animate-pulse"></div>
+              Ernährungstracker
+            </CardTitle>
+            <CardDescription>
+              Kalorien, Protein und Wasser für {format(selectedDate, "dd.MM.yyyy")}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-6">
-              <div className="bg-accent/50 rounded-xl p-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="font-medium">Kalorien</h3>
-                  <span className="text-sm">{todayNutrition.calories} / {todayNutrition.target} kcal</span>
+            {nutrition && (
+              <div className="space-y-6">
+                <div className="glass-card rounded-xl p-4 border border-blue-400/20">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="font-medium">Kalorien</h3>
+                    <span className="text-sm font-mono">
+                      {nutrition.calories} / {nutrition.targetCalories} kcal
+                    </span>
+                  </div>
+                  <Progress 
+                    value={Math.min(100, (nutrition.calories / nutrition.targetCalories) * 100)} 
+                    className="h-3 mb-4 bg-muted border border-blue-400/20" 
+                  />
+                  
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-full text-xs border-green-500/30 hover:bg-green-500/10" 
+                      onClick={() => addNutrition('calories', 200)}
+                    >
+                      +200
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-full text-xs border-green-500/30 hover:bg-green-500/10" 
+                      onClick={() => addNutrition('calories', 500)}
+                    >
+                      +500
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-full text-xs border-green-500/30 hover:bg-green-500/10" 
+                      onClick={() => addNutrition('calories', 1000)}
+                    >
+                      +1000
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-full text-xs border-red-500/30 hover:bg-red-500/10" 
+                      onClick={() => subtractNutrition('calories', 200)}
+                    >
+                      -200
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-full text-xs border-red-500/30 hover:bg-red-500/10" 
+                      onClick={() => subtractNutrition('calories', 500)}
+                    >
+                      -500
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-full text-xs border-red-500/30 hover:bg-red-500/10" 
+                      onClick={() => subtractNutrition('calories', 1000)}
+                    >
+                      -1000
+                    </Button>
+                  </div>
                 </div>
-                <Progress 
-                  value={Math.min(100, (todayNutrition.calories / todayNutrition.target) * 100)} 
-                  className="h-2.5 mt-2" 
-                />
                 
-                <div className="grid grid-cols-3 gap-4 mt-4">
-                  <Button variant="outline" size="sm" className="rounded-full" onClick={() => console.log("+200 kcal")}>+200</Button>
-                  <Button variant="outline" size="sm" className="rounded-full" onClick={() => console.log("+500 kcal")}>+500</Button>
-                  <Button variant="outline" size="sm" className="rounded-full" onClick={() => console.log("+1000 kcal")}>+1000</Button>
+                <div className="glass-card rounded-xl p-4 border border-green-400/20">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="font-medium">Protein</h3>
+                    <span className="text-sm font-mono">
+                      {nutrition.protein} / {nutrition.targetProtein} g
+                    </span>
+                  </div>
+                  <Progress 
+                    value={Math.min(100, (nutrition.protein / nutrition.targetProtein) * 100)} 
+                    className="h-3 mb-4 bg-muted border border-green-400/20" 
+                  />
+                  
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-full text-xs border-green-500/30 hover:bg-green-500/10" 
+                      onClick={() => addNutrition('protein', 10)}
+                    >
+                      +10g
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-full text-xs border-green-500/30 hover:bg-green-500/10" 
+                      onClick={() => addNutrition('protein', 25)}
+                    >
+                      +25g
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-full text-xs border-green-500/30 hover:bg-green-500/10" 
+                      onClick={() => addNutrition('protein', 50)}
+                    >
+                      +50g
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-full text-xs border-red-500/30 hover:bg-red-500/10" 
+                      onClick={() => subtractNutrition('protein', 10)}
+                    >
+                      -10g
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-full text-xs border-red-500/30 hover:bg-red-500/10" 
+                      onClick={() => subtractNutrition('protein', 25)}
+                    >
+                      -25g
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-full text-xs border-red-500/30 hover:bg-red-500/10" 
+                      onClick={() => subtractNutrition('protein', 50)}
+                    >
+                      -50g
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="glass-card rounded-xl p-4 border border-cyan-400/20">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="font-medium">Wasser</h3>
+                    <span className="text-sm font-mono">
+                      {nutrition.water.toFixed(1)} / {nutrition.targetWater} L
+                    </span>
+                  </div>
+                  <Progress 
+                    value={Math.min(100, (nutrition.water / nutrition.targetWater) * 100)} 
+                    className="h-3 mb-4 bg-muted border border-cyan-400/20" 
+                  />
+                  
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-full text-xs border-green-500/30 hover:bg-green-500/10" 
+                      onClick={() => addNutrition('water', 0.25)}
+                    >
+                      +0.25L
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-full text-xs border-green-500/30 hover:bg-green-500/10" 
+                      onClick={() => addNutrition('water', 0.5)}
+                    >
+                      +0.5L
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-full text-xs border-green-500/30 hover:bg-green-500/10" 
+                      onClick={() => addNutrition('water', 1)}
+                    >
+                      +1L
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-full text-xs border-red-500/30 hover:bg-red-500/10" 
+                      onClick={() => subtractNutrition('water', 0.25)}
+                    >
+                      -0.25L
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-full text-xs border-red-500/30 hover:bg-red-500/10" 
+                      onClick={() => subtractNutrition('water', 0.5)}
+                    >
+                      -0.5L
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-full text-xs border-red-500/30 hover:bg-red-500/10" 
+                      onClick={() => subtractNutrition('water', 1)}
+                    >
+                      -1L
+                    </Button>
+                  </div>
                 </div>
               </div>
-              
-              <div className="bg-accent/50 rounded-xl p-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="font-medium">Protein</h3>
-                  <span className="text-sm">{todayNutrition.protein} / {todayNutrition.targetProtein} g</span>
-                </div>
-                <Progress 
-                  value={Math.min(100, (todayNutrition.protein / todayNutrition.targetProtein) * 100)} 
-                  className="h-2.5 mt-2" 
-                />
-                
-                <div className="grid grid-cols-3 gap-4 mt-4">
-                  <Button variant="outline" size="sm" className="rounded-full" onClick={() => console.log("+10g Protein")}>+10g</Button>
-                  <Button variant="outline" size="sm" className="rounded-full" onClick={() => console.log("+25g Protein")}>+25g</Button>
-                  <Button variant="outline" size="sm" className="rounded-full" onClick={() => console.log("+50g Protein")}>+50g</Button>
-                </div>
-              </div>
-              
-              <div className="bg-accent/50 rounded-xl p-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="font-medium">Wasser</h3>
-                  <span className="text-sm">{todayNutrition.water} / {todayNutrition.targetWater} L</span>
-                </div>
-                <Progress 
-                  value={Math.min(100, (todayNutrition.water / todayNutrition.targetWater) * 100)} 
-                  className="h-2.5 mt-2" 
-                />
-                
-                <div className="grid grid-cols-3 gap-4 mt-4">
-                  <Button variant="outline" size="sm" className="rounded-full" onClick={() => console.log("+0.25L Wasser")}>+0.25L</Button>
-                  <Button variant="outline" size="sm" className="rounded-full" onClick={() => console.log("+0.5L Wasser")}>+0.5L</Button>
-                  <Button variant="outline" size="sm" className="rounded-full" onClick={() => console.log("+1L Wasser")}>+1L</Button>
-                </div>
-              </div>
-              
-              <Button variant="outline" className="w-full rounded-xl">
-                Ernährungsdaten bearbeiten
-              </Button>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>
       
-      <Card className="shadow-md animate-fade-in card-hover">
+      <Card className="glass-card card-hover animate-fade-in" style={{ animationDelay: "0.4s" }}>
         <CardHeader>
-          <CardTitle>Monatliche Übersicht</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <div className="h-2 w-2 bg-purple-400 rounded-full animate-pulse"></div>
+            Monatliche Übersicht
+          </CardTitle>
           <CardDescription>Klicke auf ein Datum, um Details zu sehen</CardDescription>
         </CardHeader>
         <CardContent>
@@ -291,10 +474,7 @@ const Habits = () => {
             mode="single"
             selected={selectedDate}
             onSelect={(date) => date && setSelectedDate(date)}
-            className="rounded-md pointer-events-auto"
-            modifiersStyles={{
-              selected: { backgroundColor: "black", color: "white" },
-            }}
+            className="rounded-lg pointer-events-auto glass-card border border-purple-400/20"
           />
         </CardContent>
       </Card>
