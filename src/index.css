@@ -88,24 +88,82 @@
     background: conic-gradient(from 0deg, hsl(210, 100%, 65%) 0%, hsl(210, 100%, 65%) var(--progress, 0%), transparent var(--progress, 0%));
     mask: radial-gradient(farthest-side, transparent calc(50% - 4px), black calc(50% - 4px));
   }
+
+  /* Mobile responsive classes */
+  .mobile-scroll {
+    @apply overflow-x-auto scrollbar-hide;
+  }
+
+  .mobile-grid {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4;
+  }
+
+  .mobile-card {
+    @apply min-w-[280px] sm:min-w-0;
+  }
+
+  /* Enhanced button styles */
+  .btn-modern {
+    @apply relative overflow-hidden transition-all duration-300 hover:shadow-lg hover:shadow-primary/25 active:scale-95;
+  }
+
+  .btn-modern::before {
+    @apply absolute inset-0 bg-gradient-to-r from-primary/20 to-transparent opacity-0 transition-opacity duration-300;
+    content: '';
+  }
+
+  .btn-modern:hover::before {
+    @apply opacity-100;
+  }
+
+  /* Glassmorphism enhancements */
+  .glass-enhanced {
+    @apply bg-card/60 backdrop-blur-xl border border-primary/20 shadow-2xl shadow-primary/5;
+    background: linear-gradient(135deg, hsla(220, 30%, 12%, 0.6) 0%, hsla(220, 25%, 16%, 0.8) 100%);
+  }
+
+  /* Animated backgrounds */
+  .animated-bg {
+    background: linear-gradient(-45deg, hsl(220, 35%, 8%), hsl(220, 30%, 12%), hsl(210, 100%, 65%, 0.1), hsl(220, 25%, 16%));
+    background-size: 400% 400%;
+    animation: gradient-shift 15s ease infinite;
+  }
+
+  @keyframes gradient-shift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
 }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
   background: hsl(var(--secondary));
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--primary));
+  background: linear-gradient(45deg, hsl(var(--primary)), hsl(var(--primary)/0.7));
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--primary)/0.8);
+  background: linear-gradient(45deg, hsl(var(--primary)/0.8), hsl(var(--primary)/0.5));
+}
+
+/* Hide scrollbar for mobile scroll areas */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
 /* Animations */
@@ -124,6 +182,16 @@
   to { transform: scale(1); opacity: 1; }
 }
 
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px hsl(var(--primary)/0.3); }
+  50% { box-shadow: 0 0 40px hsl(var(--primary)/0.6); }
+}
+
 .animate-fade-in {
   animation: fade-in 0.5s ease-out;
 }
@@ -134,4 +202,73 @@
 
 .animate-scale-in {
   animation: scale-in 0.4s ease-out;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Mobile-first responsive design */
+@media (max-width: 640px) {
+  .mobile-hide {
+    display: none;
+  }
+  
+  .mobile-show {
+    display: block;
+  }
+
+  .mobile-grid-compact {
+    @apply grid-cols-2 gap-2;
+  }
+
+  .mobile-text-sm {
+    @apply text-sm;
+  }
+
+  .mobile-p-2 {
+    @apply p-2;
+  }
+}
+
+@media (min-width: 641px) {
+  .mobile-hide {
+    display: block;
+  }
+  
+  .mobile-show {
+    display: none;
+  }
+}
+
+/* Enhanced focus states for accessibility */
+.focus-enhanced:focus {
+  @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-background;
+}
+
+/* Modern tab styles */
+.tab-modern {
+  @apply relative px-4 py-2 rounded-lg transition-all duration-200;
+}
+
+.tab-modern.active {
+  @apply bg-primary/20 text-primary shadow-lg;
+}
+
+.tab-modern.active::after {
+  content: '';
+  @apply absolute bottom-0 left-1/2 transform -translate-x-1/2 w-8 h-0.5 bg-primary rounded-full;
+}
+
+/* Enhanced card interactions */
+.interactive-card {
+  @apply transition-all duration-300 hover:shadow-2xl hover:shadow-primary/10 hover:-translate-y-1 active:scale-98;
+}
+
+.interactive-card:hover {
+  background: linear-gradient(135deg, hsla(220, 30%, 14%, 0.8) 0%, hsla(220, 25%, 18%, 0.8) 100%);
 }

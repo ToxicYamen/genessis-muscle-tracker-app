@@ -93,6 +93,13 @@ const Dashboard = () => {
     { name: "Wasser", value: (todayNutrition.water / todayNutrition.targetWater) * 100, color: "#06b6d4" }
   ] : [];
 
+  const formatTooltipValue = (value: any): string => {
+    if (typeof value === 'number') {
+      return value.toFixed(1);
+    }
+    return String(value);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
@@ -286,7 +293,8 @@ const Dashboard = () => {
                         backgroundColor: 'hsl(var(--card))', 
                         border: '1px solid hsl(var(--border))',
                         borderRadius: '8px'
-                      }} 
+                      }}
+                      formatter={(value) => [formatTooltipValue(value), '']}
                     />
                     <Area 
                       type="monotone" 
@@ -330,7 +338,7 @@ const Dashboard = () => {
                       ))}
                     </Pie>
                     <Tooltip 
-                      formatter={(value) => [`${value.toFixed(1)}%`, '']}
+                      formatter={(value) => [`${formatTooltipValue(value)}%`, '']}
                       contentStyle={{ 
                         backgroundColor: 'hsl(var(--card))', 
                         border: '1px solid hsl(var(--border))',
