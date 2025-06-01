@@ -1,4 +1,3 @@
-
 export interface HabitData {
   id: string;
   name: string;
@@ -98,14 +97,42 @@ class StorageService {
     localStorage.setItem('genesis4_habits', JSON.stringify(habits));
   }
 
-  updateHabitCount(habitId: string, date: string, count: number): void {
+  updateHabitProgress(habitId: string, date: string, count: number): void {
     const habits = this.getHabits();
     const habit = habits.find(h => h.id === habitId);
     if (habit) {
       habit.dates[date] = count;
       habit.completed = count;
+      
+      // Update streak calculation
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const todayStr = today.toISOString().split('T')[0];
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      
+      if (habit.dates[todayStr] >= habit.target) {
+        if (habit.dates[yesterdayStr] >= habit.target) {
+          habit.streak = (habit.streak || 0) + 1;
+        } else {
+          habit.streak = 1;
+        }
+      } else {
+        habit.streak = 0;
+      }
+      
       this.saveHabits(habits);
     }
+  }
+
+  updateHabitCount(habitId: string, date: string, count: number): void {
+    this.updateHabitProgress(habitId, date, count);
+  }
+
+  addNutritionValue(date: string, type: 'calories' | 'protein' | 'water', amount: number): void {
+    const nutrition = this.getNutrition(date);
+    nutrition[type] = Math.max(0, nutrition[type] + amount);
+    this.saveNutrition(date, nutrition);
   }
 
   // Nutrition
