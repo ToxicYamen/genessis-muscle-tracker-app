@@ -1,14 +1,14 @@
-
 import { useState, useEffect } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { format, startOfWeek, addDays } from "date-fns";
+import { format, startOfWeek, addDays, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
 import { de } from "date-fns/locale";
 import { CalendarIcon, DropletIcon, CircleCheckIcon, Utensils, PillIcon, PlusIcon, MinusIcon } from "lucide-react";
 import { storageService, HabitData, NutritionData } from "@/services/storageService";
 import { toast } from "@/components/ui/use-toast";
+import HabitManager from "@/components/HabitManager";
 
 const Habits = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -122,6 +122,30 @@ const Habits = () => {
     }
   };
 
+  // Monthly overview data
+  const currentMonth = startOfMonth(selectedDate);
+  const monthEnd = endOfMonth(selectedDate);
+  const monthDays = eachDayOfInterval({ start: currentMonth, end: monthEnd });
+
+  const getDateStatus = (date: Date) => {
+    const dateStr = format(date, "yyyy-MM-dd");
+    const dateHabits = habits.map(habit => {
+      const completed = habit.dates[dateStr] || 0;
+      return completed >= habit.target;
+    });
+    
+    const allCompleted = dateHabits.length > 0 && dateHabits.every(Boolean);
+    const someCompleted = dateHabits.some(Boolean);
+    const isToday = format(date, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd");
+    const isFuture = date > new Date();
+    
+    if (isFuture) return "future";
+    if (allCompleted) return "success";
+    if (someCompleted) return "partial";
+    if (isToday) return "today";
+    return "failed";
+  };
+
   const weekStartDate = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(weekStartDate, i));
   
@@ -143,6 +167,53 @@ const Habits = () => {
         </div>
       </div>
 
+      {/* Monthly Overview */}
+      <Card className="glass-card card-hover animate-slide-in">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2">
+            <div className="h-2 w-2 bg-purple-400 rounded-full animate-pulse"></div>
+            Monatliche Übersicht - {format(selectedDate, "MMMM yyyy", { locale: de })}
+          </CardTitle>
+          <CardDescription>Grün = Alle Ziele erreicht, Gelb = Teilweise erreicht, Rot = Ziele verfehlt</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-7 gap-2 mb-4">
+            {['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map(day => (
+              <div key={day} className="text-center text-sm font-medium text-muted-foreground p-2">
+                {day}
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-2">
+            {monthDays.map((day) => {
+              const status = getDateStatus(day);
+              const isSelected = format(day, "yyyy-MM-dd") === formattedDate;
+              
+              return (
+                <button
+                  key={day.toISOString()}
+                  onClick={() => setSelectedDate(day)}
+                  className={`
+                    aspect-square p-2 rounded-lg text-sm font-medium transition-all border-2
+                    ${isSelected ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}
+                    ${status === "success" ? "bg-green-500/20 border-green-500/30 text-green-300 hover:bg-green-500/30" : ""}
+                    ${status === "partial" ? "bg-yellow-500/20 border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/30" : ""}
+                    ${status === "failed" ? "bg-red-500/20 border-red-500/30 text-red-300 hover:bg-red-500/30" : ""}
+                    ${status === "today" ? "bg-blue-500/20 border-blue-500/30 text-blue-300 hover:bg-blue-500/30" : ""}
+                    ${status === "future" ? "bg-muted/50 border-muted text-muted-foreground hover:bg-muted" : ""}
+                  `}
+                >
+                  {format(day, "d")}
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Habit Management */}
+      <HabitManager habits={habits} onHabitsChange={loadData} />
+
       <div className="grid gap-6 md:grid-cols-2">
         <Card className="glass-card card-hover animate-slide-in">
           <CardHeader className="pb-3">
@@ -150,7 +221,7 @@ const Habits = () => {
               <div className="h-2 w-2 bg-primary rounded-full animate-pulse"></div>
               Tägliche Habits
             </CardTitle>
-            <CardDescription>Ergänzungen und Routinen</CardDescription>
+            <CardDescription>Ergänzungen und Routinen für {format(selectedDate, "dd.MM.yyyy")}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -465,7 +536,7 @@ const Habits = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <div className="h-2 w-2 bg-purple-400 rounded-full animate-pulse"></div>
-            Monatliche Übersicht
+            Kalender Navigation
           </CardTitle>
           <CardDescription>Klicke auf ein Datum, um Details zu sehen</CardDescription>
         </CardHeader>

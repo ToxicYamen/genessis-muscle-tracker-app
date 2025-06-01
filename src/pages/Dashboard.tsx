@@ -2,16 +2,17 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { LineChart, Line, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { Activity, TrendingUp, Target, Calendar, Flame, Droplet, Utensils } from "lucide-react";
-import { storageService, HabitData, NutritionData, BodyMeasurement } from "@/services/storageService";
-import { format, differenceInWeeks, addYears } from "date-fns";
+import { LineChart, Line, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, Tooltip } from "recharts";
+import { Activity, TrendingUp, Target, Calendar, Flame, Droplet, Utensils, Camera, Weight } from "lucide-react";
+import { storageService, HabitData, NutritionData, BodyMeasurement, ProgressImage } from "@/services/storageService";
+import { format, differenceInWeeks, addYears, subDays } from "date-fns";
 import { de } from "date-fns/locale";
 
 const Dashboard = () => {
   const [habits, setHabits] = useState<HabitData[]>([]);
   const [todayNutrition, setTodayNutrition] = useState<NutritionData | null>(null);
   const [bodyMeasurements, setBodyMeasurements] = useState<BodyMeasurement[]>([]);
+  const [recentImages, setRecentImages] = useState<ProgressImage[]>([]);
 
   const today = format(new Date(), "yyyy-MM-dd");
   const startDate = new Date("2025-01-01");
@@ -25,10 +26,12 @@ const Dashboard = () => {
     const habitsData = storageService.getHabits();
     const nutritionData = storageService.getNutrition(today);
     const measurementsData = storageService.getBodyMeasurements();
+    const imagesData = storageService.getProgressImages();
     
     setHabits(habitsData);
     setTodayNutrition(nutritionData);
     setBodyMeasurements(measurementsData);
+    setRecentImages(imagesData.slice(-3)); // Last 3 images
   };
 
   // Calculate progress metrics
@@ -38,10 +41,10 @@ const Dashboard = () => {
   const yearProgress = Math.min(100, (weeksElapsed / weeksTotal) * 100);
 
   // Goals for the 4-year transformation
-  const startWeight = 75; // kg
-  const goalWeight = 100; // kg nach 4 Jahren
-  const startBodyFat = 12; // %
-  const goalBodyFat = 8; // %
+  const startWeight = 75;
+  const goalWeight = 100;
+  const startBodyFat = 12;
+  const goalBodyFat = 8;
 
   const latestMeasurement = bodyMeasurements[bodyMeasurements.length - 1];
   const currentWeight = latestMeasurement?.weight || startWeight;
@@ -58,15 +61,33 @@ const Dashboard = () => {
 
   const habitCompletionRate = habits.length > 0 ? (todayHabitsCompleted / habits.length) * 100 : 0;
 
-  // Chart data for recent progress
-  const recentMeasurements = bodyMeasurements.slice(-7).map(m => ({
+  // Chart data for recent progress (last 30 days)
+  const last30Days = Array.from({ length: 30 }).map((_, i) => {
+    const date = subDays(new Date(), 29 - i);
+    const dateStr = format(date, "yyyy-MM-dd");
+    const measurement = bodyMeasurements.find(m => m.date === dateStr);
+    const nutrition = storageService.getNutrition(dateStr);
+    
+    return {
+      date: format(date, "dd.MM"),
+      weight: measurement?.weight || null,
+      bodyFat: measurement?.bodyFat || null,
+      calories: nutrition.calories,
+      protein: nutrition.protein,
+      water: nutrition.water
+    };
+  });
+
+  // Weight trend chart data
+  const weightTrendData = bodyMeasurements.slice(-10).map(m => ({
     date: format(new Date(m.date), "dd.MM"),
     weight: m.weight,
-    bodyFat: m.bodyFat
+    bodyFat: m.bodyFat,
+    muscleMass: m.muscleMass
   }));
 
-  // Nutrition progress data
-  const nutritionProgress = todayNutrition ? [
+  // Nutrition pie chart data
+  const nutritionPieData = todayNutrition ? [
     { name: "Kalorien", value: (todayNutrition.calories / todayNutrition.targetCalories) * 100, color: "#3b82f6" },
     { name: "Protein", value: (todayNutrition.protein / todayNutrition.targetProtein) * 100, color: "#22c55e" },
     { name: "Wasser", value: (todayNutrition.water / todayNutrition.targetWater) * 100, color: "#06b6d4" }
@@ -163,53 +184,44 @@ const Dashboard = () => {
         </Card>
       </div>
 
-      {/* Today's Details */}
+      {/* Current Stats & Recent Photos */}
       <div className="grid gap-6 md:grid-cols-2">
         <Card className="glass-card card-hover animate-slide-in">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Utensils className="h-4 w-4 text-blue-400" />
-              Heutige Ernährung
+              <Weight className="h-4 w-4 text-blue-400" />
+              Aktuelle Messwerte
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {todayNutrition ? (
+            {latestMeasurement ? (
               <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">Kalorien</span>
-                  <span className="font-mono text-sm">
-                    {todayNutrition.calories}/{todayNutrition.targetCalories}
-                  </span>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="stat-container">
+                    <div className="text-2xl font-bold text-primary">{latestMeasurement.weight} kg</div>
+                    <div className="text-sm text-muted-foreground">Gewicht</div>
+                  </div>
+                  <div className="stat-container">
+                    <div className="text-2xl font-bold text-orange-400">{latestMeasurement.bodyFat}%</div>
+                    <div className="text-sm text-muted-foreground">Körperfett</div>
+                  </div>
                 </div>
-                <Progress 
-                  value={(todayNutrition.calories / todayNutrition.targetCalories) * 100} 
-                  className="h-2" 
-                />
-                
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">Protein</span>
-                  <span className="font-mono text-sm">
-                    {todayNutrition.protein}g/{todayNutrition.targetProtein}g
-                  </span>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="stat-container">
+                    <div className="text-2xl font-bold text-green-400">{latestMeasurement.muscleMass} kg</div>
+                    <div className="text-sm text-muted-foreground">Muskelmasse</div>
+                  </div>
+                  <div className="stat-container">
+                    <div className="text-2xl font-bold text-cyan-400">{latestMeasurement.height} cm</div>
+                    <div className="text-sm text-muted-foreground">Größe</div>
+                  </div>
                 </div>
-                <Progress 
-                  value={(todayNutrition.protein / todayNutrition.targetProtein) * 100} 
-                  className="h-2" 
-                />
-                
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">Wasser</span>
-                  <span className="font-mono text-sm">
-                    {todayNutrition.water.toFixed(1)}L/{todayNutrition.targetWater}L
-                  </span>
-                </div>
-                <Progress 
-                  value={(todayNutrition.water / todayNutrition.targetWater) * 100} 
-                  className="h-2" 
-                />
+                <p className="text-xs text-muted-foreground text-center">
+                  Letztes Update: {format(new Date(latestMeasurement.date), "dd.MM.yyyy")}
+                </p>
               </div>
             ) : (
-              <p className="text-muted-foreground">Noch keine Ernährungsdaten für heute</p>
+              <p className="text-muted-foreground text-center py-8">Noch keine Messungen vorhanden</p>
             )}
           </CardContent>
         </Card>
@@ -217,68 +229,135 @@ const Dashboard = () => {
         <Card className="glass-card card-hover animate-slide-in" style={{ animationDelay: "0.2s" }}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Activity className="h-4 w-4 text-green-400" />
-              Heutige Habits
+              <Camera className="h-4 w-4 text-purple-400" />
+              Neueste Progress-Fotos
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {habits.map(habit => {
-                const todayValue = habit.dates[today] || 0;
-                const completion = (todayValue / habit.target) * 100;
-                
-                return (
-                  <div key={habit.id} className="flex items-center justify-between">
-                    <span className="text-sm">{habit.name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs">
-                        {todayValue}/{habit.target}
-                      </span>
-                      <div className="w-16">
-                        <Progress value={completion} className="h-1" />
-                      </div>
-                    </div>
+            {recentImages.length > 0 ? (
+              <div className="grid grid-cols-3 gap-2">
+                {recentImages.map((image) => (
+                  <div key={image.id} className="aspect-square overflow-hidden rounded-lg border border-primary/20">
+                    <img
+                      src={image.image}
+                      alt={`Progress vom ${image.date}`}
+                      className="w-full h-full object-cover transition-transform hover:scale-105"
+                    />
                   </div>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-center py-8">Noch keine Fotos hochgeladen</p>
+            )}
+            {recentImages.length > 0 && (
+              <p className="text-xs text-muted-foreground text-center mt-2">
+                Letztes Foto: {format(new Date(`${recentImages[recentImages.length - 1]?.date}`), "dd.MM.yyyy")}
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Charts */}
-      {recentMeasurements.length > 0 && (
-        <Card className="glass-card card-hover animate-fade-in" style={{ animationDelay: "0.4s" }}>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-purple-400" />
-              Aktuelle Entwicklung (7 Tage)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[200px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={recentMeasurements}>
-                  <Line 
-                    type="monotone" 
-                    dataKey="weight" 
-                    stroke="hsl(var(--primary))" 
-                    strokeWidth={2}
-                    dot={{ fill: "hsl(var(--primary))", r: 3 }}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="bodyFat" 
-                    stroke="#f97316" 
-                    strokeWidth={2}
-                    dot={{ fill: "#f97316", r: 3 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Charts Section */}
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Weight Progress Chart */}
+        {weightTrendData.length > 0 && (
+          <Card className="glass-card card-hover animate-fade-in">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-green-400" />
+                Gewichtsentwicklung (Letzte 10 Messungen)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[250px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={weightTrendData}>
+                    <defs>
+                      <linearGradient id="weightGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="date" className="text-xs" />
+                    <YAxis className="text-xs" />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'hsl(var(--card))', 
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px'
+                      }} 
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="weight" 
+                      stroke="hsl(var(--primary))" 
+                      fillOpacity={1}
+                      fill="url(#weightGradient)"
+                      strokeWidth={2}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Nutrition Progress Pie Chart */}
+        {nutritionPieData.length > 0 && (
+          <Card className="glass-card card-hover animate-fade-in" style={{ animationDelay: "0.2s" }}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Utensils className="h-4 w-4 text-blue-400" />
+                Heutige Ernährung
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[250px] flex items-center justify-center">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={nutritionPieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {nutritionPieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value) => [`${value.toFixed(1)}%`, '']}
+                      contentStyle={{ 
+                        backgroundColor: 'hsl(var(--card))', 
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px'
+                      }} 
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                <div>
+                  <div className="w-3 h-3 bg-blue-500 rounded mx-auto mb-1"></div>
+                  <span>Kalorien</span>
+                </div>
+                <div>
+                  <div className="w-3 h-3 bg-green-500 rounded mx-auto mb-1"></div>
+                  <span>Protein</span>
+                </div>
+                <div>
+                  <div className="w-3 h-3 bg-cyan-500 rounded mx-auto mb-1"></div>
+                  <span>Wasser</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {/* Motivational Message */}
       <Card className="glass-card border border-primary/20 animate-fade-in" style={{ animationDelay: "0.6s" }}>
