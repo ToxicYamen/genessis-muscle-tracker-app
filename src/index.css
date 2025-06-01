@@ -134,6 +134,16 @@
     50% { background-position: 100% 50%; }
     100% { background-position: 0% 50%; }
   }
+
+  /* Loading animations */
+  .loader-spin {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
 }
 
 /* Custom scrollbar */
@@ -266,7 +276,7 @@
 
 /* Enhanced card interactions */
 .interactive-card {
-  @apply transition-all duration-300 hover:shadow-2xl hover:shadow-primary/10 hover:-translate-y-1 active:scale-98;
+  @apply transition-all duration-300 hover:shadow-2xl hover:shadow-primary/10 hover:-translate-y-1 active:scale-95;
 }
 
 .interactive-card:hover {
