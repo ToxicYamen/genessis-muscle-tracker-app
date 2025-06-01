@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useTrackingData } from "@/contexts/DataContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +11,8 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { TrendingUp, TrendingDown, Target, Calendar, Ruler } from "lucide-react";
+import { useStore } from "@/store/useStore";
+import { toast } from "@/components/ui/use-toast";
 
 type ChartDataPoint = {
   date: string;
@@ -31,7 +33,10 @@ const Measurements = () => {
   // Get the current group
   const currentGroup = originalMuscleGroups.find(group => group.name === selectedMuscleGroup);
   
-  const handleSubmit = (e: React.FormEvent) => {
+  // Direkte Referenz auf den Store
+  const { setHeight, setWeight, setBodyFat } = useStore();
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!selectedMuscleGroup || !measurement) return;
@@ -39,13 +44,43 @@ const Measurements = () => {
     const numericMeasurement = parseFloat(measurement);
     if (isNaN(numericMeasurement)) return;
     
-    // Add measurement for the selected muscle group
-    addMeasurement(selectedMuscleGroup, {
-      date: format(new Date(), "yyyy-MM-dd"),
-      value: numericMeasurement
-    });
-    
-    setMeasurement("");
+    try {
+      // Add measurement for the selected muscle group
+      await addMeasurement(selectedMuscleGroup, {
+        date: format(new Date(), "yyyy-MM-dd"),
+        value: numericMeasurement
+      });
+      
+      // Aktualisiere den Store direkt, wenn es sich um eine der Körpermetriken handelt
+      if (selectedMuscleGroup === "Gewicht") {
+        setWeight(numericMeasurement);
+        toast({ 
+          title: "Gewicht aktualisiert", 
+          description: `Dein Gewicht wurde auf ${numericMeasurement} kg aktualisiert.` 
+        });
+      } else if (selectedMuscleGroup === "Größe") {
+        setHeight(numericMeasurement);
+        toast({ 
+          title: "Größe aktualisiert", 
+          description: `Deine Größe wurde auf ${numericMeasurement} cm aktualisiert.` 
+        });
+      } else if (selectedMuscleGroup === "Körperfett") {
+        setBodyFat(numericMeasurement);
+        toast({ 
+          title: "Körperfett aktualisiert", 
+          description: `Dein Körperfettanteil wurde auf ${numericMeasurement}% aktualisiert.` 
+        });
+      }
+      
+      setMeasurement("");
+    } catch (error) {
+      console.error("Fehler beim Hinzufügen der Messung:", error);
+      toast({ 
+        title: "Fehler", 
+        description: "Die Messung konnte nicht gespeichert werden.",
+        variant: "destructive" 
+      });
+    }
   };
 
   // Format data for the chart

@@ -11,7 +11,6 @@ import { Separator } from "@/components/ui/separator";
 import { CameraIcon, UserIcon, Target, TrendingUp, Calendar, Award, Edit3, Save, X } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { useBodyMetrics } from "@/hooks/useBodyMetrics";
-import { useStore } from "@/store/useStore";
 
 interface PersonalData {
   name: string;
@@ -53,34 +52,12 @@ const Profile = () => {
 
   // Sync body metrics with form data when they change
   useEffect(() => {
-    setFormData(prev => {
-      const newData = {
-        ...prev,
-        height: height ?? prev.height,
-        weight: weight ?? prev.weight,
-        bodyFat: bodyFat ?? prev.bodyFat
-      };
-      
-      // Update local storage immediately
-      localStorage.setItem('profileData', JSON.stringify(newData));
-      
-      return newData;
+    updateProfileData({
+      height: height || 0,
+      weight: weight || 0,
+      bodyFat: bodyFat || 0
     });
-  }, [height, weight, bodyFat]);
-  
-  // Initial load from localStorage
-  useEffect(() => {
-    const savedData = localStorage.getItem('profileData');
-    if (savedData) {
-      const parsed = JSON.parse(savedData);
-      // Update the store with saved values
-      useStore.getState().initialize({
-        height: parsed.height,
-        weight: parsed.weight,
-        bodyFat: parsed.bodyFat
-      });
-    }
-  }, []);
+  }, [height, weight, bodyFat, updateProfileData]);
 
   const milestones = [
     { age: 18, weight: "75 kg", armSize: "35 cm", shoulderSize: "110 cm", bodyFat: "12%", note: "Ausgangspunkt - Natural Training", color: "bg-blue-500" },
@@ -547,7 +524,7 @@ const Profile = () => {
           </CardContent>
         </Card>
       </motion.div>
-    </div>
+    </motion.div>
   );
 };
 

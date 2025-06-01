@@ -6,11 +6,11 @@ import { toast } from "@/components/ui/use-toast";
 
 interface DataContextProps {
   personalData: PersonalData;
-  updatePersonalData: (data: PersonalData) => void;
+  updatePersonalData: (data: Partial<PersonalData>) => Promise<void>;
   muscleGroups: MuscleGroup[];
-  addMeasurement: (groupName: string, measurement: MeasurementRecord) => void;
+  addMeasurement: (groupName: string, measurement: MeasurementRecord) => Promise<void>;
   strengthExercises: ExerciseStrength[];
-  addStrengthRecord: (exerciseName: string, record: StrengthRecord) => void;
+  addStrengthRecord: (exerciseName: string, record: StrengthRecord) => Promise<void>;
   workoutSplit: WorkoutDay[];
   milestones: Milestone[];
 }
@@ -41,16 +41,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const updatePersonalData = (data: PersonalData) => {
-    setPersonalDataState(data);
-    localStorage.setItem("personalData", JSON.stringify(data));
+  const updatePersonalData = async (data: Partial<PersonalData>) => {
+    const updatedData = { ...personalDataState, ...data };
+    setPersonalDataState(updatedData);
+    localStorage.setItem("personalData", JSON.stringify(updatedData));
     toast({
       title: "Daten aktualisiert",
       description: "Deine persönlichen Daten wurden gespeichert.",
     });
+    return Promise.resolve();
   };
 
-  const addMeasurement = (groupName: string, measurement: MeasurementRecord) => {
+  const addMeasurement = async (groupName: string, measurement: MeasurementRecord) => {
     setMuscleGroupsState(prevGroups => {
       const newGroups = prevGroups.map(group => {
         if (group.name === groupName) {
@@ -106,9 +108,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       title: "Messung hinzugefügt",
       description: `Neue Messung für ${groupName} wurde gespeichert.`,
     });
+    
+    return Promise.resolve();
   };
 
-  const addStrengthRecord = (exerciseName: string, record: StrengthRecord) => {
+  const addStrengthRecord = async (exerciseName: string, record: StrengthRecord) => {
     setStrengthExercisesState(prevExercises => {
       const newExercises = prevExercises.map(exercise => {
         if (exercise.name === exerciseName) {
@@ -146,6 +150,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       title: "Kraftwert hinzugefügt",
       description: `Neuer Kraftwert für ${exerciseName} wurde gespeichert.`,
     });
+    
+    return Promise.resolve();
   };
 
   return (
