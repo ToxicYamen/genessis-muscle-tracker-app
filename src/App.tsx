@@ -15,6 +15,7 @@ import BodyTracking from "./pages/BodyTracking";
 import Measurements from "./pages/Measurements";
 import Strength from "./pages/Strength";
 import Workout from "./pages/Workout";
+import Supplements from "./pages/Supplements";
 import Profile from "./pages/Profile";
 import Gallery from "./pages/Gallery";
 import Habits from "./pages/Habits";
@@ -99,6 +100,14 @@ const AppRoutes = () => (
         element={
           <ProtectedRoute>
             <Workout />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/supplements" 
+        element={
+          <ProtectedRoute>
+            <Supplements />
           </ProtectedRoute>
         } 
       />
