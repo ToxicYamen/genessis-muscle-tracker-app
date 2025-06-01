@@ -465,7 +465,7 @@ const Habits = () => {
                   <div className="flex justify-between items-center mb-2">
                     <h3 className="font-medium">Wasser</h3>
                     <span className="text-sm font-mono">
-                      {nutrition.water.toFixed(1)} / {nutrition.targetWater} L
+                      {(nutrition.water / 1000).toFixed(1)} / {nutrition.targetWater / 1000}L
                     </span>
                   </div>
                   <Progress 
@@ -478,7 +478,7 @@ const Habits = () => {
                       variant="outline" 
                       size="sm" 
                       className="rounded-full text-xs border-green-500/30 hover:bg-green-500/10" 
-                      onClick={() => addNutrition('water', 0.25)}
+                      onClick={() => addNutrition('water', 250)}
                     >
                       +0.25L
                     </Button>
@@ -486,7 +486,7 @@ const Habits = () => {
                       variant="outline" 
                       size="sm" 
                       className="rounded-full text-xs border-green-500/30 hover:bg-green-500/10" 
-                      onClick={() => addNutrition('water', 0.5)}
+                      onClick={() => addNutrition('water', 500)}
                     >
                       +0.5L
                     </Button>
@@ -494,7 +494,7 @@ const Habits = () => {
                       variant="outline" 
                       size="sm" 
                       className="rounded-full text-xs border-green-500/30 hover:bg-green-500/10" 
-                      onClick={() => addNutrition('water', 1)}
+                      onClick={() => addNutrition('water', 1000)}
                     >
                       +1L
                     </Button>
@@ -504,7 +504,7 @@ const Habits = () => {
                       variant="outline" 
                       size="sm" 
                       className="rounded-full text-xs border-red-500/30 hover:bg-red-500/10" 
-                      onClick={() => subtractNutrition('water', 0.25)}
+                      onClick={() => subtractNutrition('water', 250)}
                     >
                       -0.25L
                     </Button>
@@ -512,7 +512,7 @@ const Habits = () => {
                       variant="outline" 
                       size="sm" 
                       className="rounded-full text-xs border-red-500/30 hover:bg-red-500/10" 
-                      onClick={() => subtractNutrition('water', 0.5)}
+                      onClick={() => subtractNutrition('water', 500)}
                     >
                       -0.5L
                     </Button>
@@ -520,7 +520,7 @@ const Habits = () => {
                       variant="outline" 
                       size="sm" 
                       className="rounded-full text-xs border-red-500/30 hover:bg-red-500/10" 
-                      onClick={() => subtractNutrition('water', 1)}
+                      onClick={() => subtractNutrition('water', 1000)}
                     >
                       -1L
                     </Button>

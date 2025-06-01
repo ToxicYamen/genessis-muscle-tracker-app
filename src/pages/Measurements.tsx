@@ -12,12 +12,24 @@ import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { TrendingUp, TrendingDown, Target, Calendar, Ruler } from "lucide-react";
 
+type ChartDataPoint = {
+  date: string;
+  value: number;
+  formattedDate: string;
+  name?: 'Biceps' | 'Trizeps';
+};
+
 const Measurements = () => {
-  const { muscleGroups, addMeasurement } = useTrackingData();
+  const { muscleGroups: originalMuscleGroups, addMeasurement } = useTrackingData();
+  
+  // Use original muscle groups directly
+  const muscleGroups = [...originalMuscleGroups];
+  
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState(muscleGroups[0]?.name || "");
   const [measurement, setMeasurement] = useState("");
   
-  const currentGroup = muscleGroups.find(group => group.name === selectedMuscleGroup);
+  // Get the current group
+  const currentGroup = originalMuscleGroups.find(group => group.name === selectedMuscleGroup);
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,6 +39,7 @@ const Measurements = () => {
     const numericMeasurement = parseFloat(measurement);
     if (isNaN(numericMeasurement)) return;
     
+    // Add measurement for the selected muscle group
     addMeasurement(selectedMuscleGroup, {
       date: format(new Date(), "yyyy-MM-dd"),
       value: numericMeasurement
@@ -36,7 +49,7 @@ const Measurements = () => {
   };
 
   // Format data for the chart
-  const chartData = currentGroup?.measurements.map(m => ({
+  const chartData: ChartDataPoint[] | undefined = currentGroup?.measurements.map(m => ({
     date: m.date,
     value: m.value,
     formattedDate: format(new Date(m.date), "dd.MM")
@@ -45,6 +58,19 @@ const Measurements = () => {
   // Calculate trend
   const getTrend = () => {
     if (!currentGroup || currentGroup.measurements.length < 2) return null;
+    
+    // For Armumfang, we want to consider the average of both arms
+    if (selectedMuscleGroup === 'Armumfang') {
+      const recent = currentGroup.measurements.slice(-2);
+      if (recent.length < 2) return null;
+      
+      // Calculate average for the two most recent measurements
+      const avg1 = recent[0].value;
+      const avg2 = recent[1].value;
+      return avg2 - avg1;
+    }
+    
+    // For other muscle groups, use the standard calculation
     const recent = currentGroup.measurements.slice(-2);
     return recent[1].value - recent[0].value;
   };
@@ -102,7 +128,7 @@ const Measurements = () => {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="lg:col-span-1 space-y-6"
         >
-          <Card className="bg-gradient-to-br from-blue-50 to-indigo-100">
+          <Card className="glass-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Target className="w-5 h-5" />
@@ -111,14 +137,14 @@ const Measurements = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               {currentValue && (
-                <div className="text-center p-4 bg-white rounded-lg">
-                  <div className="text-3xl font-bold text-blue-600">{currentValue} cm</div>
+                <div className="text-center p-4 bg-card/50 rounded-lg border border-border">
+                  <div className="text-3xl font-bold text-blue-400">{currentValue} cm</div>
                   <div className="text-sm text-muted-foreground">Aktueller Wert</div>
                 </div>
               )}
               
               {trend !== null && (
-                <div className={`text-center p-4 bg-white rounded-lg ${trend >= 0 ? 'border-green-200' : 'border-red-200'} border-2`}>
+                <div className={`text-center p-4 bg-card/50 rounded-lg border ${trend >= 0 ? 'border-green-500/30' : 'border-red-500/30'}`}>
                   <div className={`flex items-center justify-center gap-2 text-lg font-semibold ${trend >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {trend >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
                     {trend >= 0 ? '+' : ''}{trend.toFixed(1)} cm
@@ -128,8 +154,8 @@ const Measurements = () => {
               )}
 
               {currentGoal && (
-                <div className="text-center p-4 bg-white rounded-lg">
-                  <div className="text-xl font-bold text-purple-600">{currentGoal.targetValue} cm</div>
+                <div className="text-center p-4 bg-card/50 rounded-lg border border-border">
+                  <div className="text-xl font-bold text-purple-400">{currentGoal.targetValue} cm</div>
                   <div className="text-sm text-muted-foreground">Jahresziel</div>
                   {currentValue && (
                     <div className="text-xs text-muted-foreground mt-1">
@@ -209,11 +235,13 @@ const Measurements = () => {
                       />
                       <Tooltip 
                         contentStyle={{
-                          backgroundColor: 'white',
-                          border: '1px solid #e5e7eb',
+                          backgroundColor: 'hsl(240, 10%, 10%)',
+                          border: '1px solid hsl(240, 10%, 20%)',
                           borderRadius: '8px',
-                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)',
+                          color: 'hsl(0, 0%, 90%)'
                         }}
+                        labelStyle={{ color: 'hsl(0, 0%, 90%)' }}
                       />
                       <Area 
                         type="monotone" 
@@ -259,7 +287,7 @@ const Measurements = () => {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.3, delay: index * 0.1 }}
-                    className="border rounded-lg p-4 bg-gradient-to-br from-gray-50 to-gray-100 hover:shadow-md transition-shadow"
+                    className="border rounded-lg p-4 bg-card/50 border-border hover:bg-accent/20 transition-colors"
                   >
                     <div className="text-center">
                       <Badge variant="secondary" className="mb-2">
@@ -271,7 +299,7 @@ const Measurements = () => {
                       <div className="text-sm text-muted-foreground mt-1">
                         +{goal.extraGain} cm extra
                       </div>
-                      <div className="text-xl font-bold text-blue-600 mt-2">
+                      <div className="text-xl font-bold text-blue-400 mt-2">
                         = {goal.targetValue} cm
                       </div>
                     </div>

@@ -139,7 +139,7 @@ const Strength = () => {
           className="lg:col-span-1 space-y-6"
         >
           {stats && (
-            <Card className="bg-gradient-to-br from-red-50 to-orange-100">
+            <Card className="glass-card">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Target className="w-5 h-5" />
@@ -147,14 +147,14 @@ const Strength = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="text-center p-4 bg-white rounded-lg">
-                  <div className="text-3xl font-bold text-red-600">{stats.latest} kg</div>
+                <div className="text-center p-4 bg-card/50 rounded-lg border border-red-800/30">
+                  <div className="text-3xl font-bold text-red-400">{stats.latest} kg</div>
                   <div className="text-sm text-muted-foreground">Aktueller Rekord</div>
                 </div>
                 
                 {stats.trend !== 0 && (
-                  <div className={`text-center p-4 bg-white rounded-lg ${stats.trend >= 0 ? 'border-green-200' : 'border-red-200'} border-2`}>
-                    <div className={`flex items-center justify-center gap-2 text-lg font-semibold ${stats.trend >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <div className={`text-center p-4 rounded-lg border ${stats.trend >= 0 ? 'border-green-500/30' : 'border-red-500/30'}`}>
+                    <div className={`flex items-center justify-center gap-2 text-lg font-semibold ${stats.trend >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       <TrendingUp className="w-5 h-5" />
                       {stats.trend >= 0 ? '+' : ''}{stats.trend} kg
                     </div>
@@ -163,12 +163,12 @@ const Strength = () => {
                 )}
 
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="text-center p-3 bg-white rounded-lg">
-                    <div className="text-xl font-bold text-blue-600">{stats.naturalProgress.toFixed(0)}%</div>
+                  <div className="text-center p-3 bg-blue-900/20 rounded-lg border border-blue-800/30">
+                    <div className="text-xl font-bold text-blue-400">{stats.naturalProgress.toFixed(0)}%</div>
                     <div className="text-xs text-muted-foreground">Natural Ziel</div>
                   </div>
-                  <div className="text-center p-3 bg-white rounded-lg">
-                    <div className="text-xl font-bold text-purple-600">{stats.enhancedProgress.toFixed(0)}%</div>
+                  <div className="text-center p-3 bg-purple-900/20 rounded-lg border border-purple-800/30">
+                    <div className="text-xl font-bold text-purple-400">{stats.enhancedProgress.toFixed(0)}%</div>
                     <div className="text-xs text-muted-foreground">Enhanced Ziel</div>
                   </div>
                 </div>
@@ -222,7 +222,7 @@ const Strength = () => {
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.3, delay: index * 0.05 }}
-                    className="flex items-center justify-between p-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                    className="flex items-center justify-between p-2 bg-card/50 rounded-lg border border-border hover:bg-accent/50 transition-colors"
                   >
                     <div>
                       <div className="font-medium">{record.value} kg</div>
@@ -280,10 +280,10 @@ const Strength = () => {
                       />
                       <Tooltip 
                         contentStyle={{
-                          backgroundColor: 'white',
-                          border: '1px solid #e5e7eb',
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
                           borderRadius: '8px',
-                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)'
                         }}
                       />
                       <Area 
@@ -328,10 +328,13 @@ const Strength = () => {
             {currentExercise && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
-                  <div className="border rounded-lg p-6 bg-gradient-to-br from-blue-50 to-indigo-100">
+                  <div className="border rounded-lg p-6 bg-blue-900/20 border-blue-800/30 h-full">
                     <div className="text-center">
                       <Badge className="mb-3 bg-blue-600">Natural-Ziel (22 Jahre)</Badge>
-                      <div className="text-3xl font-bold text-blue-600">{currentExercise.naturalTarget} kg</div>
+                      <div className="text-3xl font-bold text-blue-400">{currentExercise.naturalTarget} kg</div>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        &nbsp;
+                      </div>
                       {stats && (
                         <div className="mt-2">
                           <div className="text-sm text-muted-foreground">
@@ -350,12 +353,14 @@ const Strength = () => {
                 </div>
                 
                 <div className="space-y-4">
-                  <div className="border rounded-lg p-6 bg-gradient-to-br from-purple-50 to-pink-100">
-                    <div className="text-center">
-                      <Badge className="mb-3 bg-purple-600">Mit Substanzen (22 Jahre)</Badge>
-                      <div className="text-3xl font-bold text-purple-600">{currentExercise.enhancedTarget} kg</div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        +{currentExercise.enhancedTarget - currentExercise.naturalTarget} kg extra
+                  <div className="border rounded-lg p-6 bg-purple-900/20 border-purple-800/30 h-full">
+                    <div className="text-center h-full flex flex-col">
+                      <div>
+                        <Badge className="mb-3 bg-purple-600">Mit Substanzen (22 Jahre)</Badge>
+                        <div className="text-3xl font-bold text-purple-400">{currentExercise.enhancedTarget} kg</div>
+                        <div className="text-sm text-muted-foreground mt-1">
+                          +{currentExercise.enhancedTarget - currentExercise.naturalTarget} kg extra
+                        </div>
                       </div>
                       {stats && (
                         <div className="mt-2">
@@ -384,13 +389,13 @@ const Strength = () => {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm"
           onClick={() => setEditingRecord(null)}
         >
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="bg-white rounded-lg p-6 w-full max-w-md mx-4"
+            className="bg-card rounded-lg p-6 w-full max-w-md mx-4 border border-border shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold mb-4">Kraftwert bearbeiten</h3>

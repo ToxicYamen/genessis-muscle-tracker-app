@@ -21,23 +21,13 @@ export const personalData: PersonalData = {
 
 export const muscleGroups: MuscleGroup[] = [
   {
-    name: "Bizeps",
+    name: "Armumfang",
     measurements: [],
     goals: [
       { age: 19, startValue: 35, endValue: 38, extraGain: 1, targetValue: 39 },
       { age: 20, startValue: 38, endValue: 40, extraGain: 2, targetValue: 42 },
       { age: 21, startValue: 40, endValue: 43, extraGain: 2, targetValue: 45 },
       { age: 22, startValue: 43, endValue: 45, extraGain: 2, targetValue: 47 }
-    ]
-  },
-  {
-    name: "Trizeps",
-    measurements: [],
-    goals: [
-      { age: 19, startValue: 32, endValue: 34, extraGain: 1, targetValue: 35 },
-      { age: 20, startValue: 34, endValue: 36, extraGain: 2, targetValue: 38 },
-      { age: 21, startValue: 36, endValue: 39, extraGain: 2, targetValue: 41 },
-      { age: 22, startValue: 39, endValue: 41, extraGain: 2, targetValue: 43 }
     ]
   },
   {

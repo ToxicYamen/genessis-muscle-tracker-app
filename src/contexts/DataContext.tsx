@@ -59,6 +59,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             m => m.date === measurement.date
           );
           
+          // Update personal data if it's weight, height or body fat
+          if (groupName === 'Gewicht') {
+            updatePersonalData({
+              ...personalDataState,
+              weight: measurement.value
+            });
+          } else if (groupName === 'Größe') {
+            updatePersonalData({
+              ...personalDataState,
+              height: measurement.value
+            });
+          } else if (groupName === 'Körperfett') {
+            updatePersonalData({
+              ...personalDataState,
+              bodyFat: measurement.value
+            });
+          }
+          
           if (existingIndex >= 0) {
             // Update existing measurement
             const updatedMeasurements = [...group.measurements];

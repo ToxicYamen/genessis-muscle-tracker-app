@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { storageService } from "@/services/storageService";
-import { Edit2, Plus, Trash2, Save, X, Dumbbell, Apple, Pill } from "lucide-react";
+import { Calendar, Edit2, Plus, Save, Trash2, X, Dumbbell, Apple, Pill } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 
 const Workout = () => {
@@ -112,17 +112,30 @@ const Workout = () => {
           )}
         </div>
         <div className="flex items-center gap-3">
-          <Card className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
-            <CardContent className="p-4 flex items-center justify-between">
-              <span className="font-medium">Heute:</span>
-              <div className="text-right">
-                <div className="font-bold">{todayWorkout}</div>
-                {todayWorkoutIndex >= 0 && todayWorkoutIndex < workoutData.days.length && (
-                  <div className="text-sm opacity-90">
-                    {workoutData.days[todayWorkoutIndex].isRestDay ? "Ruhetag" : workoutData.days[todayWorkoutIndex].focus}
+          <Card className="overflow-hidden bg-gradient-to-br from-blue-700/90 to-purple-800/90 text-white border-0 shadow-lg flex items-center">
+            <CardContent className="p-3 flex items-center">
+              <div className="flex items-center gap-3">
+                <div className="p-1.5 rounded-lg bg-white/10">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <div className="pr-2">
+                  <div className="text-xs font-medium text-blue-100">Heute:</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">
+                      {todayWorkout || 'Kein Training'}
+                    </span>
+                    {todayWorkoutIndex >= 0 && todayWorkoutIndex < workoutData.days.length && !workoutData.days[todayWorkoutIndex].isRestDay && (
+                      <Badge variant="secondary" className="h-5 text-xs bg-white/20 hover:bg-white/30 text-white border-0">
+                        {workoutData.days[todayWorkoutIndex].focus}
+                      </Badge>
+                    )}
+                    {(todayWorkoutIndex === -1 || (todayWorkoutIndex < workoutData.days.length && workoutData.days[todayWorkoutIndex].isRestDay)) && (
+                      <Badge variant="secondary" className="h-5 text-xs bg-amber-500/20 text-amber-300 border-amber-400/30 hover:bg-amber-500/30">
+                        Ruhetag
+                      </Badge>
+                    )}
                   </div>
-                )}
-                {todayWorkoutIndex === -1 && <div className="text-sm opacity-90">Ruhetag</div>}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -165,17 +178,17 @@ const Workout = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div className="text-center p-3 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">{nutrition.calories}</div>
+                <div className="text-center p-3 bg-blue-900/20 rounded-lg border border-blue-800/30">
+                  <div className="text-2xl font-bold text-blue-400">{nutrition.calories}</div>
                   <div className="text-sm text-muted-foreground">/ {nutrition.targetCalories} kcal</div>
                 </div>
-                <div className="text-center p-3 bg-green-50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">{nutrition.protein}g</div>
+                <div className="text-center p-3 bg-green-900/20 rounded-lg border border-green-800/30">
+                  <div className="text-2xl font-bold text-green-400">{nutrition.protein}g</div>
                   <div className="text-sm text-muted-foreground">/ {nutrition.targetProtein}g Protein</div>
                 </div>
               </div>
-              <div className="text-center p-3 bg-purple-50 rounded-lg">
-                <div className="text-2xl font-bold text-purple-600">{nutrition.water}ml</div>
+              <div className="flex items-center gap-3 w-full p-3 bg-card/50 rounded-lg border border-border hover:bg-accent/50 transition-colors">
+                <div className="text-2xl font-bold text-purple-400">{nutrition.water}ml</div>
                 <div className="text-sm text-muted-foreground">/ {nutrition.targetWater}ml Wasser</div>
               </div>
             </CardContent>
@@ -190,7 +203,7 @@ const Workout = () => {
             </CardHeader>
             <CardContent>
               <div className="text-center p-4">
-                <div className="text-3xl font-bold text-green-600">{todaysTaken}</div>
+                <div className="text-3xl font-bold text-green-400">{todaysTaken}</div>
                 <div className="text-sm text-muted-foreground">/ {supplements.length} eingenommen</div>
                 <div className="w-full bg-gray-200 rounded-full h-2 mt-3">
                   <div 
@@ -273,7 +286,7 @@ const Workout = () => {
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ duration: 0.3, delay: index * 0.05 }}
-                            className="flex items-center gap-2"
+                            className="flex items-center gap-2 w-full"
                           >
                             {editMode ? (
                               <>
@@ -291,7 +304,7 @@ const Workout = () => {
                                 </Button>
                               </>
                             ) : (
-                              <div className="flex items-center gap-3 w-full p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                              <div className="flex items-center gap-3 w-full p-3 bg-card/50 rounded-lg border border-border hover:bg-accent/50 transition-colors">
                                 <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                                 <span className="flex-1">{exercise}</span>
                               </div>

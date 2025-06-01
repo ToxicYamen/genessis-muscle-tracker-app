@@ -107,7 +107,7 @@ const Supplements = () => {
             >
               <Card 
                 className={`cursor-pointer transition-all duration-300 ${
-                  isTaken ? 'ring-2 ring-green-500 bg-green-50' : 'hover:shadow-lg'
+                  isTaken ? 'ring-1 ring-green-800/30 bg-green-900/10 dark:bg-green-900/70' : 'hover:shadow-lg'
                 }`}
                 onClick={() => toggleSupplement(supplement.id)}
               >
@@ -119,9 +119,9 @@ const Supplements = () => {
                       >
                         <IconComponent className="w-5 h-5" />
                       </div>
-                      <div>
+                      <div className={isTaken ? 'text-foreground' : ''}>
                         <CardTitle className="text-lg">{supplement.name}</CardTitle>
-                        <Badge variant="secondary" className="text-xs mt-1">
+                        <Badge variant={isTaken ? 'default' : 'secondary'} className="text-xs mt-1">
                           {supplement.category}
                         </Badge>
                       </div>
@@ -140,11 +140,11 @@ const Supplements = () => {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <div className={`flex items-center gap-2 text-sm ${isTaken ? 'text-foreground' : 'text-muted-foreground'}`}>
                       <Zap className="w-4 h-4" />
                       <span>{supplement.dosage}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <div className={`flex items-center gap-2 text-sm ${isTaken ? 'text-foreground' : 'text-muted-foreground'}`}>
                       <Clock className="w-4 h-4" />
                       <span>{supplement.timing}</span>
                     </div>
