@@ -99,26 +99,6 @@ export const Layout = ({ children }: LayoutProps) => {
             >
               {navigation.find(item => isActive(item.href))?.name || "Dashboard"}
             </motion.h1>
-            
-            {/* Mobile Navigation */}
-            <div className="lg:hidden ml-auto">
-              <div className="flex items-center gap-2 overflow-x-auto pb-2">
-                {navigation.slice(0, 4).map((item) => (
-                  <Link
-                    key={item.name}
-                    to={item.href}
-                    className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs whitespace-nowrap transition-colors ${
-                      isActive(item.href)
-                        ? "bg-primary/20 text-primary"
-                        : "text-muted-foreground hover:text-primary"
-                    }`}
-                  >
-                    <item.icon className="h-3 w-3" />
-                    <span className="hidden sm:inline">{item.name}</span>
-                  </Link>
-                ))}
-              </div>
-            </div>
           </div>
           
           <motion.div 

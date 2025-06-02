@@ -6,6 +6,8 @@ export interface HabitData {
   completed: number;
   streak: number;
   dates: Record<string, number>; // date -> count
+  completedDates: string[]; // Add this for compatibility
+  description?: string; // Add optional description
 }
 
 export interface NutritionData {
@@ -32,6 +34,18 @@ export interface BodyMeasurement {
   notes?: string;
 }
 
+export interface MeasurementData {
+  date: string;
+  chest: number;
+  waist: number;
+  hips: number;
+  armumfang: number;
+  thigh: number;
+  neck: number;
+  shoulders: number;
+  forearm: number;
+}
+
 export interface ProgressImage {
   id: string;
   date: string;
@@ -48,9 +62,13 @@ export interface SupplementData {
   dosage: string;
   timing: string;
   taken: Record<string, boolean>; // date -> taken
-  category: 'basic' | 'performance' | 'health' | 'recovery';
+  category: 'basic' | 'performance' | 'health' | 'recovery' | 'advanced';
   icon: string;
   color: string;
+}
+
+export interface AdvancedSupplementsSettings {
+  enabled: boolean;
 }
 
 export interface WorkoutData {
@@ -90,11 +108,39 @@ class StorageService {
   // Habits
   getHabits(): HabitData[] {
     const stored = localStorage.getItem('genesis4_habits');
-    return stored ? JSON.parse(stored) : [];
+    const habits = stored ? JSON.parse(stored) : [];
+    
+    // Ensure completedDates array exists for compatibility
+    return habits.map((habit: HabitData) => ({
+      ...habit,
+      completedDates: habit.completedDates || [],
+      description: habit.description || ''
+    }));
   }
 
   saveHabits(habits: HabitData[]): void {
     localStorage.setItem('genesis4_habits', JSON.stringify(habits));
+  }
+
+  toggleHabitCompletion(habitId: string, date: string): void {
+    const habits = this.getHabits();
+    const habit = habits.find(h => h.id === habitId);
+    if (habit) {
+      if (!habit.completedDates) {
+        habit.completedDates = [];
+      }
+      
+      const dateIndex = habit.completedDates.indexOf(date);
+      if (dateIndex > -1) {
+        // Remove date if already completed
+        habit.completedDates.splice(dateIndex, 1);
+      } else {
+        // Add date if not completed
+        habit.completedDates.push(date);
+      }
+      
+      this.saveHabits(habits);
+    }
   }
 
   updateHabitProgress(habitId: string, date: string, count: number): void {
@@ -178,6 +224,32 @@ class StorageService {
     localStorage.setItem('genesis4_measurements', JSON.stringify(filtered));
   }
 
+  // Measurements (for the Measurements page)
+  getMeasurements(): MeasurementData[] {
+    const stored = localStorage.getItem('genesis4_body_measurements');
+    return stored ? JSON.parse(stored) : [];
+  }
+
+  saveMeasurement(measurement: MeasurementData): void {
+    const measurements = this.getMeasurements();
+    const existingIndex = measurements.findIndex(m => m.date === measurement.date);
+    
+    if (existingIndex >= 0) {
+      measurements[existingIndex] = measurement;
+    } else {
+      measurements.push(measurement);
+    }
+    
+    measurements.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    localStorage.setItem('genesis4_body_measurements', JSON.stringify(measurements));
+  }
+
+  deleteMeasurement(date: string): void {
+    const measurements = this.getMeasurements();
+    const filtered = measurements.filter(m => m.date !== date);
+    localStorage.setItem('genesis4_body_measurements', JSON.stringify(filtered));
+  }
+
   // Progress Images
   getProgressImages(): ProgressImage[] {
     const stored = localStorage.getItem('genesis4_images');
@@ -209,7 +281,27 @@ class StorageService {
   // Supplements
   getSupplements(): SupplementData[] {
     const stored = localStorage.getItem('genesis4_supplements');
-    return stored ? JSON.parse(stored) : this.getDefaultSupplements();
+    if (!stored) {
+      const defaultSupplements = this.getDefaultSupplements();
+      this.saveSupplements(defaultSupplements);
+      return defaultSupplements;
+    }
+    
+    const savedSupplements = JSON.parse(stored);
+    const defaultSupplements = this.getDefaultSupplements();
+    
+    // Check if any default supplements are missing from saved supplements
+    const missingSupplements = defaultSupplements.filter(
+      defaultSup => !savedSupplements.some((savedSup: any) => savedSup.id === defaultSup.id)
+    );
+    
+    if (missingSupplements.length > 0) {
+      const updatedSupplements = [...savedSupplements, ...missingSupplements];
+      this.saveSupplements(updatedSupplements);
+      return updatedSupplements;
+    }
+    
+    return savedSupplements;
   }
 
   saveSupplements(supplements: SupplementData[]): void {
@@ -223,6 +315,15 @@ class StorageService {
       supplement.taken[date] = !supplement.taken[date];
       this.saveSupplements(supplements);
     }
+  }
+
+  getAdvancedSupplementsSettings(): AdvancedSupplementsSettings {
+    const stored = localStorage.getItem('genesis4_advanced_supplements_settings');
+    return stored ? JSON.parse(stored) : { enabled: false };
+  }
+
+  saveAdvancedSupplementsSettings(settings: AdvancedSupplementsSettings): void {
+    localStorage.setItem('genesis4_advanced_supplements_settings', JSON.stringify(settings));
   }
 
   private getDefaultSupplements(): SupplementData[] {
@@ -286,6 +387,57 @@ class StorageService {
         category: 'performance',
         icon: 'Dumbbell',
         color: '#ef4444'
+      },
+      {
+        id: 'vitamin_c',
+        name: 'Vitamin C',
+        dosage: '500-1000mg',
+        timing: 'Morgens',
+        taken: {},
+        category: 'health',
+        icon: 'Citrus',
+        color: '#f97316'
+      },
+      // Advanced supplements
+      {
+        id: 'mk677',
+        name: 'MK-677',
+        dosage: '10-25mg',
+        timing: 'Abends',
+        taken: {},
+        category: 'advanced',
+        icon: 'Zap',
+        color: '#8b5cf6'
+      },
+      {
+        id: 'epicatechin',
+        name: 'Epicatechin',
+        dosage: '100-200mg',
+        timing: 'Pre-Workout',
+        taken: {},
+        category: 'advanced',
+        icon: 'Activity',
+        color: '#ef4444'
+      },
+      {
+        id: 'enclomiphene',
+        name: 'Enclomiphene',
+        dosage: '12.5-25mg',
+        timing: 'Täglich',
+        taken: {},
+        category: 'advanced',
+        icon: 'Shield',
+        color: '#22c55e'
+      },
+      {
+        id: 'slin_pills',
+        name: 'SLIN Pills',
+        dosage: '1-2 Kapseln',
+        timing: 'Vor Mahlzeiten',
+        taken: {},
+        category: 'advanced',
+        icon: 'Pill',
+        color: '#06b6d4'
       }
     ];
   }
@@ -406,7 +558,47 @@ class StorageService {
   // Strength Data
   getStrengthData(): StrengthData[] {
     const stored = localStorage.getItem('genesis4_strength');
-    return stored ? JSON.parse(stored) : [];
+    if (!stored) {
+      // If no data exists, create some default entries
+      const defaultData: StrengthData[] = [
+        {
+          id: 'strength_1',
+          date: new Date().toISOString().split('T')[0],
+          exercise: 'Bankdrücken',
+          sets: 4,
+          reps: 8,
+          weight: 80
+        },
+        {
+          id: 'strength_2',
+          date: new Date().toISOString().split('T')[0],
+          exercise: 'Kniebeugen',
+          sets: 4,
+          reps: 8,
+          weight: 100
+        },
+        {
+          id: 'strength_3',
+          date: new Date().toISOString().split('T')[0],
+          exercise: 'Kreuzheben',
+          sets: 4,
+          reps: 6,
+          weight: 120
+        },
+        {
+          id: 'strength_4',
+          date: new Date().toISOString().split('T')[0],
+          exercise: 'Schulterdrücken',
+          sets: 4,
+          reps: 10,
+          weight: 50
+        }
+      ];
+      // Save the default data
+      localStorage.setItem('genesis4_strength', JSON.stringify(defaultData));
+      return defaultData;
+    }
+    return JSON.parse(stored);
   }
 
   saveStrengthEntry(entry: StrengthData): void {
@@ -434,6 +626,7 @@ class StorageService {
     const data = {
       habits: this.getHabits(),
       measurements: this.getBodyMeasurements(),
+      bodyMeasurements: this.getMeasurements(),
       images: this.getProgressImages(),
       supplements: this.getSupplements(),
       workout: this.getWorkoutData(),
@@ -449,6 +642,7 @@ class StorageService {
       
       if (data.habits) this.saveHabits(data.habits);
       if (data.measurements) localStorage.setItem('genesis4_measurements', JSON.stringify(data.measurements));
+      if (data.bodyMeasurements) localStorage.setItem('genesis4_body_measurements', JSON.stringify(data.bodyMeasurements));
       if (data.images) localStorage.setItem('genesis4_images', JSON.stringify(data.images));
       if (data.supplements) this.saveSupplements(data.supplements);
       if (data.workout) this.saveWorkoutData(data.workout);

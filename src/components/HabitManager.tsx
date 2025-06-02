@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -96,7 +95,8 @@ const HabitManager = ({ habits, onHabitsChange }: HabitManagerProps) => {
         target: formData.target,
         completed: 0,
         streak: 0,
-        dates: {}
+        dates: {},
+        completedDates: []
       };
       
       const updatedHabits = [...habits, newHabit];

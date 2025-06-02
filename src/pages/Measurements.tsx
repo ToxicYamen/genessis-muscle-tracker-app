@@ -1,350 +1,328 @@
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { useTrackingData } from "@/contexts/DataContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from "recharts";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
-import { TrendingUp, TrendingDown, Target, Calendar, Ruler } from "lucide-react";
-import { useStore } from "@/store/useStore";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { Ruler, Plus, Trash2, TrendingUp } from "lucide-react";
+import { storageService } from "@/services/storageService";
 import { toast } from "@/components/ui/use-toast";
 
-type ChartDataPoint = {
+interface MeasurementData {
   date: string;
-  value: number;
-  formattedDate: string;
-  name?: 'Biceps' | 'Trizeps';
-};
+  chest: number;
+  waist: number;
+  hips: number;
+  armumfang: number; // renamed from biceps
+  thigh: number;
+  neck: number;
+  shoulders: number;
+  forearm: number;
+}
 
 const Measurements = () => {
-  const { muscleGroups: originalMuscleGroups, addMeasurement } = useTrackingData();
-  
-  // Use original muscle groups directly
-  const muscleGroups = [...originalMuscleGroups];
-  
-  const [selectedMuscleGroup, setSelectedMuscleGroup] = useState(muscleGroups[0]?.name || "");
-  const [measurement, setMeasurement] = useState("");
-  
-  // Get the current group
-  const currentGroup = originalMuscleGroups.find(group => group.name === selectedMuscleGroup);
-  
-  // Direkte Referenz auf den Store
-  const { setHeight, setWeight, setBodyFat } = useStore();
+  const [measurements, setMeasurements] = useState<MeasurementData[]>([]);
+  const [activeTab, setActiveTab] = useState("chest");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [newMeasurement, setNewMeasurement] = useState<Partial<MeasurementData>>({
+    date: format(new Date(), "yyyy-MM-dd"),
+    chest: 0,
+    waist: 0,
+    hips: 0,
+    armumfang: 0,
+    thigh: 0,
+    neck: 0,
+    shoulders: 0,
+    forearm: 0,
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!selectedMuscleGroup || !measurement) return;
-    
-    const numericMeasurement = parseFloat(measurement);
-    if (isNaN(numericMeasurement)) return;
-    
-    try {
-      // Add measurement for the selected muscle group
-      await addMeasurement(selectedMuscleGroup, {
-        date: format(new Date(), "yyyy-MM-dd"),
-        value: numericMeasurement
-      });
-      
-      // Aktualisiere den Store direkt, wenn es sich um eine der Körpermetriken handelt
-      if (selectedMuscleGroup === "Gewicht") {
-        setWeight(numericMeasurement);
-        toast({ 
-          title: "Gewicht aktualisiert", 
-          description: `Dein Gewicht wurde auf ${numericMeasurement} kg aktualisiert.` 
-        });
-      } else if (selectedMuscleGroup === "Größe") {
-        setHeight(numericMeasurement);
-        toast({ 
-          title: "Größe aktualisiert", 
-          description: `Deine Größe wurde auf ${numericMeasurement} cm aktualisiert.` 
-        });
-      } else if (selectedMuscleGroup === "Körperfett") {
-        setBodyFat(numericMeasurement);
-        toast({ 
-          title: "Körperfett aktualisiert", 
-          description: `Dein Körperfettanteil wurde auf ${numericMeasurement}% aktualisiert.` 
-        });
-      }
-      
-      setMeasurement("");
-    } catch (error) {
-      console.error("Fehler beim Hinzufügen der Messung:", error);
-      toast({ 
-        title: "Fehler", 
-        description: "Die Messung konnte nicht gespeichert werden.",
-        variant: "destructive" 
-      });
-    }
+  const measurementFields = [
+    { key: "chest", label: "Brust", unit: "cm", color: "#ef4444" },
+    { key: "waist", label: "Taille", unit: "cm", color: "#f97316" },
+    { key: "hips", label: "Hüfte", unit: "cm", color: "#eab308" },
+    { key: "armumfang", label: "Armumfang", unit: "cm", color: "#22c55e" }, // renamed
+    { key: "thigh", label: "Oberschenkel", unit: "cm", color: "#06b6d4" },
+    { key: "neck", label: "Nacken", unit: "cm", color: "#8b5cf6" },
+    { key: "shoulders", label: "Schultern", unit: "cm", color: "#ec4899" },
+    { key: "forearm", label: "Unterarm", unit: "cm", color: "#10b981" },
+  ];
+
+  useEffect(() => {
+    loadMeasurements();
+  }, []);
+
+  const loadMeasurements = () => {
+    const data = storageService.getMeasurements();
+    setMeasurements(data.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
   };
 
-  // Format data for the chart
-  const chartData: ChartDataPoint[] | undefined = currentGroup?.measurements.map(m => ({
-    date: m.date,
-    value: m.value,
-    formattedDate: format(new Date(m.date), "dd.MM")
-  }));
-
-  // Calculate trend
-  const getTrend = () => {
-    if (!currentGroup || currentGroup.measurements.length < 2) return null;
-    
-    // For Armumfang, we want to consider the average of both arms
-    if (selectedMuscleGroup === 'Armumfang') {
-      const recent = currentGroup.measurements.slice(-2);
-      if (recent.length < 2) return null;
-      
-      // Calculate average for the two most recent measurements
-      const avg1 = recent[0].value;
-      const avg2 = recent[1].value;
-      return avg2 - avg1;
+  const saveMeasurement = () => {
+    if (!newMeasurement.date) {
+      toast({
+        title: "Fehler",
+        description: "Bitte wähle ein Datum aus.",
+        variant: "destructive",
+      });
+      return;
     }
-    
-    // For other muscle groups, use the standard calculation
-    const recent = currentGroup.measurements.slice(-2);
-    return recent[1].value - recent[0].value;
+
+    const measurementToSave = {
+      ...newMeasurement,
+      date: newMeasurement.date!,
+    } as MeasurementData;
+
+    storageService.saveMeasurement(measurementToSave);
+    loadMeasurements();
+    setIsDialogOpen(false);
+    setNewMeasurement({
+      date: format(new Date(), "yyyy-MM-dd"),
+      chest: 0,
+      waist: 0,
+      hips: 0,
+      armumfang: 0,
+      thigh: 0,
+      neck: 0,
+      shoulders: 0,
+      forearm: 0,
+    });
+
+    toast({
+      title: "Messung gespeichert",
+      description: "Deine Körpermaße wurden erfolgreich gespeichert.",
+    });
   };
 
-  const trend = getTrend();
-  const currentValue = currentGroup?.measurements[currentGroup.measurements.length - 1]?.value;
-  const currentGoal = currentGroup?.goals[0]; // Assuming current age goal
+  const deleteMeasurement = (date: string) => {
+    storageService.deleteMeasurement(date);
+    loadMeasurements();
+    
+    toast({
+      title: "Messung gelöscht",
+      description: "Die Messung wurde erfolgreich entfernt.",
+    });
+  };
+
+  const getChartData = (field: string) => {
+    return measurements.map((measurement) => ({
+      date: format(new Date(measurement.date), "dd.MM", { locale: de }),
+      value: measurement[field as keyof MeasurementData] as number,
+      fullDate: measurement.date
+    }));
+  };
+
+  const getLatestValue = (field: string) => {
+    if (measurements.length === 0) return 0;
+    return measurements[measurements.length - 1][field as keyof MeasurementData] as number;
+  };
+
+  const getTrend = (field: string) => {
+    if (measurements.length < 2) return 0;
+    const latest = measurements[measurements.length - 1][field as keyof MeasurementData] as number;
+    const previous = measurements[measurements.length - 2][field as keyof MeasurementData] as number;
+    return latest - previous;
+  };
 
   return (
-    <div className="space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="flex flex-col md:flex-row md:items-center justify-between gap-4"
-      >
-        <h2 className="text-3xl font-bold">Körpermaße Tracking</h2>
-        <div className="flex items-center gap-3">
-          <Badge variant="outline" className="text-lg px-3 py-1">
-            <Ruler className="w-4 h-4 mr-2" />
-            {selectedMuscleGroup}
-          </Badge>
-          {currentValue && (
-            <Badge className="text-lg px-3 py-1 bg-gradient-to-r from-blue-500 to-purple-600">
-              {currentValue} cm
-            </Badge>
-          )}
+    <div className="space-y-4 sm:space-y-6 animate-fade-in">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-orange-400 bg-clip-text text-transparent">
+            Messwerte
+          </h2>
+          <p className="text-sm sm:text-base text-muted-foreground">Verfolge deine Körpermaße und Fortschritte</p>
         </div>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
-      >
-        <Tabs 
-          defaultValue={selectedMuscleGroup} 
-          onValueChange={setSelectedMuscleGroup}
-          className="w-full"
-        >
-          <TabsList className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-8 w-full">
-            {muscleGroups.map((group) => (
-              <TabsTrigger key={group.name} value={group.name} className="text-xs">
-                {group.name}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-      </motion.div>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="lg:col-span-1 space-y-6"
-        >
-          <Card className="glass-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Target className="w-5 h-5" />
-                Aktuelle Statistiken
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {currentValue && (
-                <div className="text-center p-4 bg-card/50 rounded-lg border border-border">
-                  <div className="text-3xl font-bold text-blue-400">{currentValue} cm</div>
-                  <div className="text-sm text-muted-foreground">Aktueller Wert</div>
-                </div>
-              )}
-              
-              {trend !== null && (
-                <div className={`text-center p-4 bg-card/50 rounded-lg border ${trend >= 0 ? 'border-green-500/30' : 'border-red-500/30'}`}>
-                  <div className={`flex items-center justify-center gap-2 text-lg font-semibold ${trend >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {trend >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-                    {trend >= 0 ? '+' : ''}{trend.toFixed(1)} cm
-                  </div>
-                  <div className="text-sm text-muted-foreground">Letzter Trend</div>
-                </div>
-              )}
-
-              {currentGoal && (
-                <div className="text-center p-4 bg-card/50 rounded-lg border border-border">
-                  <div className="text-xl font-bold text-purple-400">{currentGoal.targetValue} cm</div>
-                  <div className="text-sm text-muted-foreground">Jahresziel</div>
-                  {currentValue && (
-                    <div className="text-xs text-muted-foreground mt-1">
-                      Noch {(currentGoal.targetValue - currentValue).toFixed(1)} cm
-                    </div>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="w-5 h-5" />
-                Neue Messung
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <label htmlFor="measurement" className="text-sm font-medium">
-                    {selectedMuscleGroup} Umfang (cm)
-                  </label>
-                  <Input
-                    id="measurement"
-                    type="number"
-                    step="0.1"
-                    placeholder="z.B. 35.5"
-                    value={measurement}
-                    onChange={(e) => setMeasurement(e.target.value)}
-                    required
-                    className="text-lg"
-                  />
-                </div>
-                <Button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700">
-                  Messung speichern
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-          className="lg:col-span-2"
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle>Entwicklung: {selectedMuscleGroup}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[400px]">
-                {chartData && chartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart
-                      data={chartData}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                    >
-                      <defs>
-                        <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis 
-                        dataKey="formattedDate" 
-                        stroke="#6b7280"
-                        fontSize={12}
-                      />
-                      <YAxis 
-                        stroke="#6b7280"
-                        fontSize={12}
-                      />
-                      <Tooltip 
-                        contentStyle={{
-                          backgroundColor: 'hsl(240, 10%, 10%)',
-                          border: '1px solid hsl(240, 10%, 20%)',
-                          borderRadius: '8px',
-                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)',
-                          color: 'hsl(0, 0%, 90%)'
-                        }}
-                        labelStyle={{ color: 'hsl(0, 0%, 90%)' }}
-                      />
-                      <Area 
-                        type="monotone" 
-                        dataKey="value" 
-                        stroke="#3b82f6" 
-                        strokeWidth={3}
-                        fill="url(#colorValue)"
-                        dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
-                        activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2, fill: 'white' }}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-center">
-                      <div className="text-6xl mb-4">📏</div>
-                      <p className="text-muted-foreground text-lg">Keine Daten verfügbar</p>
-                      <p className="text-sm text-muted-foreground">Füge deine erste Messung hinzu</p>
-                    </div>
-                  </div>
-                )}
+        
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="w-full sm:w-auto">
+              <Plus className="mr-2 h-4 w-4" />
+              Neue Messung
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Neue Messung hinzufügen</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="date">Datum</Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={newMeasurement.date}
+                  onChange={(e) => setNewMeasurement(prev => ({ ...prev, date: e.target.value }))}
+                />
               </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.4 }}
-      >
-        <Card>
-          <CardHeader>
-            <CardTitle>Jahres-Ziele für {selectedMuscleGroup}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {currentGroup && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {currentGroup.goals.map((goal, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.3, delay: index * 0.1 }}
-                    className="border rounded-lg p-4 bg-card/50 border-border hover:bg-accent/20 transition-colors"
-                  >
-                    <div className="text-center">
-                      <Badge variant="secondary" className="mb-2">
-                        {goal.age} Jahre
-                      </Badge>
-                      <div className="text-lg font-semibold">
-                        {goal.startValue} → {goal.endValue} cm
-                      </div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        +{goal.extraGain} cm extra
-                      </div>
-                      <div className="text-xl font-bold text-blue-400 mt-2">
-                        = {goal.targetValue} cm
-                      </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                {measurementFields.map((field) => (
+                  <div key={field.key} className="space-y-2">
+                    <Label htmlFor={field.key} className="text-sm">{field.label}</Label>
+                    <div className="relative">
+                      <Input
+                        id={field.key}
+                        type="number"
+                        step="0.1"
+                        value={newMeasurement[field.key as keyof MeasurementData] || ""}
+                        onChange={(e) => setNewMeasurement(prev => ({ 
+                          ...prev, 
+                          [field.key]: parseFloat(e.target.value) || 0 
+                        }))}
+                        className="pr-8"
+                      />
+                      <span className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-muted-foreground">
+                        {field.unit}
+                      </span>
                     </div>
-                  </motion.div>
+                  </div>
                 ))}
               </div>
-            )}
-          </CardContent>
-        </Card>
-      </motion.div>
+              
+              <Button onClick={saveMeasurement} className="w-full">
+                Messung speichern
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Top Navigation Tabs */}
+      <Card className="glass-card">
+        <CardContent className="p-0">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <div className="border-b border-border">
+              <TabsList className="grid w-full grid-cols-4 sm:grid-cols-8 h-auto bg-transparent p-1">
+                {measurementFields.map((field) => (
+                  <TabsTrigger
+                    key={field.key}
+                    value={field.key}
+                    className="text-xs sm:text-sm px-2 py-2 data-[state=active]:bg-primary/20 data-[state=active]:text-primary rounded-md"
+                  >
+                    <span className="hidden sm:inline">{field.label}</span>
+                    <span className="sm:hidden">{field.label.slice(0, 3)}</span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
+
+            {measurementFields.map((field) => (
+              <TabsContent key={field.key} value={field.key} className="p-4 sm:p-6">
+                <div className="space-y-4 sm:space-y-6">
+                  {/* Statistics */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <Card className="p-3 sm:p-4">
+                      <div className="text-xs sm:text-sm text-muted-foreground">Aktuell</div>
+                      <div className="text-lg sm:text-2xl font-bold" style={{ color: field.color }}>
+                        {getLatestValue(field.key)} {field.unit}
+                      </div>
+                    </Card>
+                    
+                    <Card className="p-3 sm:p-4">
+                      <div className="text-xs sm:text-sm text-muted-foreground">Trend</div>
+                      <div className={`text-lg sm:text-2xl font-bold flex items-center gap-1 ${
+                        getTrend(field.key) > 0 ? 'text-green-500' : getTrend(field.key) < 0 ? 'text-red-500' : 'text-muted-foreground'
+                      }`}>
+                        <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4" />
+                        {getTrend(field.key) > 0 ? '+' : ''}{getTrend(field.key).toFixed(1)} {field.unit}
+                      </div>
+                    </Card>
+
+                    <Card className="p-3 sm:p-4">
+                      <div className="text-xs sm:text-sm text-muted-foreground">Messungen</div>
+                      <div className="text-lg sm:text-2xl font-bold text-primary">
+                        {measurements.length}
+                      </div>
+                    </Card>
+
+                    <Card className="p-3 sm:p-4">
+                      <div className="text-xs sm:text-sm text-muted-foreground">Max</div>
+                      <div className="text-lg sm:text-2xl font-bold text-orange-400">
+                        {measurements.length > 0 
+                          ? Math.max(...measurements.map(m => m[field.key as keyof MeasurementData] as number)).toFixed(1)
+                          : 0
+                        } {field.unit}
+                      </div>
+                    </Card>
+                  </div>
+
+                  {/* Chart */}
+                  <Card className="p-4 sm:p-6">
+                    <div className="h-64 sm:h-80">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={getChartData(field.key)}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis 
+                            dataKey="date" 
+                            stroke="hsl(var(--muted-foreground))"
+                            fontSize={12}
+                          />
+                          <YAxis 
+                            stroke="hsl(var(--muted-foreground))"
+                            fontSize={12}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "hsl(var(--card))",
+                              border: "1px solid hsl(var(--border))",
+                              borderRadius: "8px",
+                            }}
+                            labelStyle={{ color: "hsl(var(--foreground))" }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="value"
+                            stroke={field.color}
+                            strokeWidth={2}
+                            dot={{ fill: field.color, strokeWidth: 2, r: 4 }}
+                            activeDot={{ r: 6, fill: field.color }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </Card>
+
+                  {/* Recent Measurements */}
+                  <Card className="p-4 sm:p-6">
+                    <h3 className="text-lg font-medium mb-4">Letzte Messungen</h3>
+                    <div className="space-y-2 max-h-40 sm:max-h-60 overflow-y-auto">
+                      {measurements
+                        .slice(-10)
+                        .reverse()
+                        .map((measurement, index) => (
+                          <div key={measurement.date} className="flex items-center justify-between p-2 sm:p-3 bg-card/50 rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <Badge variant="outline" className="text-xs">
+                                {format(new Date(measurement.date), "dd.MM.yy", { locale: de })}
+                              </Badge>
+                              <span className="font-medium text-sm sm:text-base">
+                                {measurement[field.key as keyof MeasurementData]} {field.unit}
+                              </span>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deleteMeasurement(measurement.date)}
+                              className="text-red-500 hover:text-red-700 p-1"
+                            >
+                              <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                    </div>
+                  </Card>
+                </div>
+              </TabsContent>
+            ))}
+          </Tabs>
+        </CardContent>
+      </Card>
     </div>
   );
 };

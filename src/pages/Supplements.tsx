@@ -1,219 +1,305 @@
-
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { storageService } from "@/services/storageService";
-import { CheckCircle2, Circle, Plus, Edit2, Trash2, Calendar, Clock, Zap, Sun, Droplet, Shield, Activity, Dumbbell } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
-
-const iconMap = {
-  Zap, Sun, Droplet, Shield, Activity, Dumbbell
-};
+import { CheckCircle, Circle, Pill, Zap, Sun, Droplets, Shield, Activity, Dumbbell, Circle as CircleIcon, Settings } from "lucide-react";
+import { storageService, SupplementData, AdvancedSupplementsSettings } from "@/services/storageService";
+import { toast } from "@/components/ui/use-toast";
 
 const Supplements = () => {
-  const [supplements, setSupplements] = useState(storageService.getSupplements());
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [supplements, setSupplements] = useState<SupplementData[]>([]);
+  const [advancedSettings, setAdvancedSettings] = useState<AdvancedSupplementsSettings>({ enabled: false });
+  const [currentDate] = useState(new Date());
+
+  useEffect(() => {
+    loadSupplements();
+    loadAdvancedSettings();
+  }, []);
+
+  const loadSupplements = () => {
+    const data = storageService.getSupplements();
+    setSupplements(data);
+  };
+
+  const loadAdvancedSettings = () => {
+    const settings = storageService.getAdvancedSupplementsSettings();
+    setAdvancedSettings(settings);
+  };
 
   const toggleSupplement = (supplementId: string) => {
-    storageService.toggleSupplementTaken(supplementId, selectedDate);
-    setSupplements(storageService.getSupplements());
+    const today = format(new Date(), 'yyyy-MM-dd');
+    storageService.toggleSupplementTaken(supplementId, today);
+    loadSupplements();
+
+    const supplement = supplements.find(s => s.id === supplementId);
+    const wasTaken = supplement?.taken[today];
+    
+    toast({
+      title: wasTaken ? "Supplement eingenommen" : "Einnahme rückgängig",
+      description: `${supplement?.name} für heute ${wasTaken ? 'als eingenommen markiert' : 'zurückgesetzt'}.`,
+    });
   };
 
-  const getTakenCount = () => {
-    return supplements.filter(s => s.taken[selectedDate]).length;
+  const toggleAdvancedSupplements = (enabled: boolean) => {
+    const newSettings = { enabled };
+    setAdvancedSettings(newSettings);
+    storageService.saveAdvancedSupplementsSettings(newSettings);
+    
+    toast({
+      title: enabled ? "Ergänzungsmittel aktiviert" : "Ergänzungsmittel deaktiviert",
+      description: enabled ? "Erweiterte Ergänzungsmittel sind jetzt sichtbar." : "Erweiterte Ergänzungsmittel wurden ausgeblendet.",
+    });
   };
 
-  const getCategoryColor = (category: string) => {
-    const colors = {
-      basic: "bg-blue-500",
-      performance: "bg-red-500", 
-      health: "bg-green-500",
-      recovery: "bg-purple-500"
-    };
-    return colors[category as keyof typeof colors] || "bg-gray-500";
+  const isSupplementTaken = (supplementId: string) => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const supplement = supplements.find(s => s.id === supplementId);
+    return supplement?.taken[today] || false;
   };
 
-  const progressPercentage = (getTakenCount() / supplements.length) * 100;
+  const getSupplementIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'Zap': return <Zap className="h-4 w-4" />;
+      case 'Sun': return <Sun className="h-4 w-4" />;
+      case 'Droplet': return <Droplets className="h-4 w-4" />;
+      case 'Shield': return <Shield className="h-4 w-4" />;
+      case 'Activity': return <Activity className="h-4 w-4" />;
+      case 'Dumbbell': return <Dumbbell className="h-4 w-4" />;
+      case 'Citrus': return <CircleIcon className="h-4 w-4" />;
+      default: return <Pill className="h-4 w-4" />;
+    }
+  };
+
+  const categorizedSupplements = {
+    basic: supplements.filter(s => s.category === 'basic'),
+    performance: supplements.filter(s => s.category === 'performance'),
+    health: supplements.filter(s => s.category === 'health'),
+    recovery: supplements.filter(s => s.category === 'recovery'),
+    advanced: supplements.filter(s => s.category === 'advanced')
+  };
+
+  const categoryLabels = {
+    basic: 'Grundlagen',
+    performance: 'Performance',
+    health: 'Gesundheit',
+    recovery: 'Regeneration',
+    advanced: 'Ergänzungsmittel'
+  };
+
+  const regularSupplements = supplements.filter(s => s.category !== 'advanced');
+  const todayTaken = regularSupplements.filter(s => isSupplementTaken(s.id)).length;
+  const totalSupplements = regularSupplements.length;
+
+  const advancedTodayTaken = categorizedSupplements.advanced.filter(s => isSupplementTaken(s.id)).length;
+  const totalAdvanced = categorizedSupplements.advanced.length;
 
   return (
-    <div className="space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="flex flex-col md:flex-row md:items-center justify-between gap-4"
-      >
-        <h2 className="text-3xl font-bold">Supplements</h2>
-        <div className="flex items-center gap-4">
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="px-3 py-2 border rounded-lg"
-          />
-          <Badge variant="outline" className="text-lg px-3 py-1">
-            {getTakenCount()} / {supplements.length}
+    <div className="space-y-4 sm:space-y-6 animate-fade-in">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">
+            Supplements
+          </h2>
+          <p className="text-sm sm:text-base text-muted-foreground">
+            Verfolge deine tägliche Supplementeinnahme
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-sm">
+            {todayTaken}/{totalSupplements} heute eingenommen
           </Badge>
         </div>
-      </motion.div>
+      </div>
 
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
-      >
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="w-5 h-5" />
-              Tagesfortschritt
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex justify-between text-sm">
-                <span>Eingenommen</span>
-                <span>{Math.round(progressPercentage)}%</span>
-              </div>
-              <Progress value={progressPercentage} className="h-3" />
-              <p className="text-sm text-muted-foreground">
-                {getTakenCount() === supplements.length 
-                  ? "🎉 Alle Supplements für heute eingenommen!" 
-                  : `Noch ${supplements.length - getTakenCount()} Supplements ausstehend`
-                }
+      {/* Advanced Supplements Toggle */}
+      <Card className="glass-card">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="h-5 w-5 text-primary" />
+            Erweiterte Ergänzungsmittel
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Ergänzungsmittel aktivieren</p>
+              <p className="text-xs text-muted-foreground">
+                Zeige erweiterte Ergänzungsmittel (MK-677, Epicatechin, etc.)
               </p>
             </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+            <Switch
+              checked={advancedSettings.enabled}
+              onCheckedChange={toggleAdvancedSupplements}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {supplements.map((supplement, index) => {
-          const IconComponent = iconMap[supplement.icon as keyof typeof iconMap] || Zap;
-          const isTaken = supplement.taken[selectedDate];
-          
-          return (
-            <motion.div
-              key={supplement.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Card 
-                className={`cursor-pointer transition-all duration-300 ${
-                  isTaken ? 'ring-1 ring-green-800/30 bg-green-900/10 dark:bg-green-900/70' : 'hover:shadow-lg'
-                }`}
+      {/* Today's Overview */}
+      <Card className="glass-card">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2">
+            <CheckCircle className="h-5 w-5 text-primary" />
+            Heute - {format(new Date(), "dd.MM.yyyy", { locale: de })}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {regularSupplements.map((supplement) => (
+              <div
+                key={supplement.id}
+                className={`
+                  glass-card rounded-xl p-3 border transition-all cursor-pointer hover:scale-105
+                  ${isSupplementTaken(supplement.id) 
+                    ? 'border-green-500/50 bg-green-500/10' 
+                    : 'border-primary/20'
+                  }
+                `}
                 onClick={() => toggleSupplement(supplement.id)}
               >
-                <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div 
+                      className="p-2 rounded-full border"
+                      style={{ 
+                        backgroundColor: `${supplement.color}20`,
+                        borderColor: `${supplement.color}50`
+                      }}
+                    >
+                      {getSupplementIcon(supplement.icon)}
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-sm">{supplement.name}</h4>
+                      <p className="text-xs text-muted-foreground">{supplement.dosage}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    {isSupplementTaken(supplement.id) ? (
+                      <CheckCircle className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <Circle className="h-5 w-5 text-muted-foreground" />
+                    )}
+                  </div>
+                </div>
+                
+                <div className="mt-2 text-xs text-muted-foreground">
+                  {supplement.timing}
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Advanced Supplements Section */}
+      {advancedSettings.enabled && totalAdvanced > 0 && (
+        <Card className="glass-card border-purple-500/30">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg text-purple-400">
+                {categoryLabels.advanced}
+              </CardTitle>
+              <Badge variant="outline" className="text-sm border-purple-500/30">
+                {advancedTodayTaken}/{totalAdvanced} heute eingenommen
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {categorizedSupplements.advanced.map((supplement) => (
+                <div
+                  key={supplement.id}
+                  className={`
+                    glass-card rounded-xl p-3 border transition-all cursor-pointer hover:scale-105
+                    ${isSupplementTaken(supplement.id) 
+                      ? 'border-purple-500/50 bg-purple-500/10' 
+                      : 'border-purple-500/20'
+                    }
+                  `}
+                  onClick={() => toggleSupplement(supplement.id)}
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div 
-                        className={`p-2 rounded-lg text-white ${getCategoryColor(supplement.category)}`}
+                        className="p-2 rounded-full border"
+                        style={{ 
+                          backgroundColor: `${supplement.color}20`,
+                          borderColor: `${supplement.color}50`
+                        }}
                       >
-                        <IconComponent className="w-5 h-5" />
+                        {getSupplementIcon(supplement.icon)}
                       </div>
-                      <div className={isTaken ? 'text-foreground' : ''}>
-                        <CardTitle className="text-lg">{supplement.name}</CardTitle>
-                        <Badge variant={isTaken ? 'default' : 'secondary'} className="text-xs mt-1">
-                          {supplement.category}
-                        </Badge>
+                      <div>
+                        <h4 className="font-medium text-sm">{supplement.name}</h4>
+                        <p className="text-xs text-muted-foreground">{supplement.dosage}</p>
                       </div>
                     </div>
-                    <motion.div
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      {isTaken ? (
-                        <CheckCircle2 className="w-6 h-6 text-green-500" />
+                    
+                    <div className="flex items-center">
+                      {isSupplementTaken(supplement.id) ? (
+                        <CheckCircle className="h-5 w-5 text-purple-500" />
                       ) : (
-                        <Circle className="w-6 h-6 text-gray-400" />
+                        <Circle className="h-5 w-5 text-muted-foreground" />
                       )}
-                    </motion.div>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="space-y-2">
-                    <div className={`flex items-center gap-2 text-sm ${isTaken ? 'text-foreground' : 'text-muted-foreground'}`}>
-                      <Zap className="w-4 h-4" />
-                      <span>{supplement.dosage}</span>
-                    </div>
-                    <div className={`flex items-center gap-2 text-sm ${isTaken ? 'text-foreground' : 'text-muted-foreground'}`}>
-                      <Clock className="w-4 h-4" />
-                      <span>{supplement.timing}</span>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          );
-        })}
-      </div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.3 }}
-        className="grid gap-6 md:grid-cols-2"
-      >
-        <Card>
-          <CardHeader>
-            <CardTitle>Kategorien Übersicht</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {['basic', 'performance', 'health', 'recovery'].map(category => {
-                const categorySupps = supplements.filter(s => s.category === category);
-                const taken = categorySupps.filter(s => s.taken[selectedDate]).length;
-                const percentage = categorySupps.length > 0 ? (taken / categorySupps.length) * 100 : 0;
-                
-                return (
-                  <div key={category} className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="capitalize">{category}</span>
-                      <span>{taken}/{categorySupps.length}</span>
-                    </div>
-                    <Progress value={percentage} className="h-2" />
+                  
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    {supplement.timing}
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
+      )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Wochenstatistik</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {Array.from({ length: 7 }, (_, i) => {
-                const date = new Date();
-                date.setDate(date.getDate() - i);
-                const dateStr = format(date, "yyyy-MM-dd");
-                const dayTaken = supplements.filter(s => s.taken[dateStr]).length;
-                const percentage = supplements.length > 0 ? (dayTaken / supplements.length) * 100 : 0;
-                
-                return (
-                  <div key={dateStr} className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>{format(date, "EEEE", { locale: de })}</span>
-                      <span>{dayTaken}/{supplements.length}</span>
+      {/* Categories */}
+      {Object.entries(categorizedSupplements).map(([category, sups]) => {
+        if (sups.length === 0 || category === 'advanced') return null;
+        
+        return (
+          <Card key={category} className="glass-card">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">
+                {categoryLabels[category as keyof typeof categoryLabels]}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {sups.map((supplement) => (
+                  <div
+                    key={supplement.id}
+                    className="glass-card rounded-xl p-3 border border-primary/20"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div 
+                        className="p-2 rounded-full border"
+                        style={{ 
+                          backgroundColor: `${supplement.color}20`,
+                          borderColor: `${supplement.color}50`
+                        }}
+                      >
+                        {getSupplementIcon(supplement.icon)}
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-medium">{supplement.name}</h4>
+                        <p className="text-sm text-muted-foreground">{supplement.dosage}</p>
+                        <p className="text-xs text-muted-foreground">{supplement.timing}</p>
+                      </div>
                     </div>
-                    <Progress value={percentage} className="h-2" />
                   </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 };

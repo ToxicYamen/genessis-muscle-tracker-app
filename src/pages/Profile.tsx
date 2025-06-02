@@ -1,552 +1,376 @@
-import { useState, useRef, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
+
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
-import { CameraIcon, UserIcon, Target, TrendingUp, Calendar, Award, Edit3, Save, X } from "lucide-react";
-import { toast } from "@/components/ui/use-toast";
-import { useBodyMetrics } from "@/hooks/useBodyMetrics";
+import { Badge } from "@/components/ui/badge";
+import { User, Scale, Ruler, Activity, Target, Utensils, Calendar } from "lucide-react";
 import { useStore } from "@/store/useStore";
-
-interface PersonalData {
-  name: string;
-  age: number;
-  calories: number;
-  protein: number;
-  sleep: number;
-  height?: number;
-  weight?: number;
-  bodyFat?: number;
-  profileImage?: string;
-}
+import { toast } from "@/components/ui/use-toast";
 
 const Profile = () => {
-  const { height, weight, bodyFat, updateMetric } = useBodyMetrics();
-  const [isEditing, setIsEditing] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [formData, setFormData] = useState<PersonalData>(() => {
-    const saved = localStorage.getItem('profileData');
-    return saved ? JSON.parse(saved) : {
-      name: "",
-      age: 18,
-      calories: 0,
-      protein: 0,
-      sleep: 0,
-      height: height || 0,
-      weight: weight || 0,
-      bodyFat: bodyFat || 0
-    };
+  const { height, weight, bodyFat, setHeight, setWeight, setBodyFat } = useStore();
+  
+  const [profile, setProfile] = useState({
+    name: "Yamen",
+    age: 18,
+    birthday: "2006-06-06", // 06.06 - wird 19
+    dailyCalories: 4864,
+    dailyProtein: 280
   });
 
-  // Update profile data function
-  const updateProfileData = useCallback((data: Partial<PersonalData>) => {
-    const updatedData = { ...formData, ...data };
-    setFormData(updatedData);
-    localStorage.setItem('profileData', JSON.stringify(updatedData));
-    return updatedData;
-  }, [formData]);
+  const [editMode, setEditMode] = useState(false);
+  const [tempProfile, setTempProfile] = useState(profile);
 
-  // Sync body metrics with form data when they change
   useEffect(() => {
-    setFormData(prev => {
-      const newData = {
-        ...prev,
-        height: height ?? prev.height,
-        weight: weight ?? prev.weight,
-        bodyFat: bodyFat ?? prev.bodyFat
-      };
-      
-      // Update local storage immediately
-      localStorage.setItem('profileData', JSON.stringify(newData));
-      
-      return newData;
-    });
-  }, [height, weight, bodyFat]);
-  
-  // Initial load from localStorage
-  useEffect(() => {
-    const savedData = localStorage.getItem('profileData');
-    if (savedData) {
-      const parsed = JSON.parse(savedData);
-      // Update the store with saved values
-      useStore.getState().initialize({
-        height: parsed.height,
-        weight: parsed.weight,
-        bodyFat: parsed.bodyFat
-      });
+    // Lade Profil aus localStorage falls vorhanden
+    const savedProfile = localStorage.getItem('user_profile');
+    if (savedProfile) {
+      const parsed = JSON.parse(savedProfile);
+      setProfile(parsed);
+      setTempProfile(parsed);
     }
   }, []);
 
-  const milestones = [
-    { age: 18, weight: "75 kg", armSize: "35 cm", shoulderSize: "110 cm", bodyFat: "12%", note: "Ausgangspunkt - Natural Training", color: "bg-blue-500" },
-    { age: 19, weight: "82 kg", armSize: "38 cm", shoulderSize: "115 cm", bodyFat: "10%", note: "Jahr 1 - Grundlagen aufbauen", color: "bg-green-500" },
-    { age: 20, weight: "88 kg", armSize: "41 cm", shoulderSize: "120 cm", bodyFat: "9%", note: "Jahr 2 - Kraft & Masse", color: "bg-yellow-500" },
-    { age: 21, weight: "95 kg", armSize: "44 cm", shoulderSize: "125 cm", bodyFat: "8.5%", note: "Jahr 3 - Definition & Größe", color: "bg-orange-500" },
-    { age: 22, weight: "100 kg", armSize: "46 cm", shoulderSize: "130 cm", bodyFat: "8%", note: "Jahr 4 - Ziel erreicht!", color: "bg-red-500" }
-  ];
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
+  const saveProfile = () => {
+    setProfile(tempProfile);
+    localStorage.setItem('user_profile', JSON.stringify(tempProfile));
+    setEditMode(false);
     
-    setFormData(prev => ({
-      ...prev,
-      [name]: name === "name" ? value : parseFloat(value) || 0
-    }));
+    toast({
+      title: "Profil gespeichert",
+      description: "Deine Profildaten wurden erfolgreich aktualisiert.",
+    });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      updateProfileData(formData);
-      setIsEditing(false);
-      
-      toast({
-        title: "Profil aktualisiert",
-        description: "Deine persönlichen Daten wurden erfolgreich gespeichert.",
-      });
-    } catch (error) {
-      toast({
-        title: "Fehler",
-        description: "Beim Speichern der Daten ist ein Fehler aufgetreten.",
-        variant: "destructive"
-      });
-    }
+  const cancelEdit = () => {
+    setTempProfile(profile);
+    setEditMode(false);
   };
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  // Transformation year calculation
+  const transformationStartDate = new Date('2025-01-01');
+  const currentDate = new Date();
+  const nextBirthday = new Date('2025-06-06');
+  const yearsSinceStart = Math.floor((currentDate.getTime() - transformationStartDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+  const currentTransformationYear = Math.max(1, Math.min(4, yearsSinceStart + 1));
+  
+  // Age calculation
+  const currentAge = currentDate >= nextBirthday ? 19 : 18;
 
-    if (file.size > 2 * 1024 * 1024) {
-      toast({
-        title: "Datei zu groß",
-        description: "Bitte wähle ein Bild unter 2MB aus.",
-        variant: "destructive"
-      });
-      return;
-    }
+  // BMI calculation
+  const bmi = height && weight ? (weight / Math.pow(height / 100, 2)).toFixed(1) : null;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const imageData = e.target?.result as string;
-      updateProfileData({ profileImage: imageData });
-      
-      toast({
-        title: "Profilbild aktualisiert",
-        description: "Dein Profilbild wurde erfolgreich hochgeladen.",
-      });
-    };
-
-    reader.readAsDataURL(file);
-  };
-
-  // Calculate BMI and progress
-  const bmi = weight ? (weight / ((height / 100) ** 2)).toFixed(1) : '--';
-  const yearProgress = formData.age ? ((formData.age - 18) / 4) * 100 : 0;
-  const weightProgress = weight ? ((weight - 75) / (100 - 75)) * 100 : 0;
-
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-        delayChildren: 0.1
-      }
-    }
-  };
-
-  const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-      transition: {
-        duration: 0.5,
-        ease: "easeOut"
-      }
-    }
+  // Transformation progress
+  const getTransformationProgress = () => {
+    const startWeight = 75;
+    const targetWeight = 100;
+    const currentWeight = weight || startWeight;
+    const progress = ((currentWeight - startWeight) / (targetWeight - startWeight)) * 100;
+    return Math.min(100, Math.max(0, progress));
   };
 
   return (
-    <div className="space-y-8 p-6">
-      {/* Header */}
-      <div className="text-center">
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-blue-400 to-purple-400 bg-clip-text text-transparent mb-2">
-          Mein Profil
-        </h1>
-        <p className="text-muted-foreground">Verwalte deine Transformation und Ziele</p>
+    <div className="space-y-4 sm:space-y-6 animate-fade-in max-w-6xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">
+            Profil
+          </h2>
+          <p className="text-sm sm:text-base text-muted-foreground">Verwalte deine persönlichen Daten und Ziele</p>
+        </div>
+        
+        {!editMode ? (
+          <Button onClick={() => setEditMode(true)} variant="outline" className="w-full sm:w-auto">
+            Bearbeiten
+          </Button>
+        ) : (
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button onClick={saveProfile} className="flex-1 sm:flex-none">
+              Speichern
+            </Button>
+            <Button onClick={cancelEdit} variant="outline" className="flex-1 sm:flex-none">
+              Abbrechen
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* Profile Header Card */}
-      <motion.div variants={itemVariants}>
-        <Card className="glass-enhanced border-primary/20 overflow-hidden">
-          <div className="relative h-32 bg-gradient-to-r from-primary/20 via-blue-400/20 to-purple-400/20">
-            <div className="absolute inset-0 bg-gradient-to-t from-background/50 to-transparent" />
-          </div>
-          <CardContent className="relative -mt-16 pb-6">
-            <div className="flex flex-col md:flex-row items-center md:items-end gap-6">
-              {/* Profile Picture */}
-              <div className="relative group">
-                <Avatar className="h-32 w-32 border-4 border-background shadow-xl">
-                  <AvatarImage src={formData.profileImage} alt={formData.name || "Profilbild"} />
-                  <AvatarFallback className="text-3xl bg-primary/10">
-                    {formData.name ? formData.name.charAt(0).toUpperCase() : <UserIcon className="h-12 w-12" />}
-                  </AvatarFallback>
-                </Avatar>
-                <Button
-                  size="icon"
-                  variant="outline"
-                  className="absolute -bottom-2 -right-2 rounded-full border-primary/30 bg-background/80 backdrop-blur group-hover:scale-110 transition-transform"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <CameraIcon className="h-4 w-4" />
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                />
-              </div>
-
-              {/* Profile Info */}
-              <div className="flex-1 text-center md:text-left">
-                <h2 className="text-3xl font-bold">{formData.name || "Dein Name"}</h2>
-                <p className="text-muted-foreground text-lg mb-4">{formData.age} Jahre • Genesis 4 Transformation</p>
-                
-                <div className="flex flex-wrap gap-2 justify-center md:justify-start">
-                  <Badge variant="secondary" className="bg-primary/10 text-primary">
-                    {height ? `${height} cm` : '--'}
-                  </Badge>
-                  <Badge variant="secondary" className="bg-green-500/10 text-green-400">
-                    {weight ? `${weight} kg` : '--'}
-                  </Badge>
-                  <Badge variant="secondary" className="bg-orange-500/10 text-orange-400">
-                    {bodyFat ? `${bodyFat}%` : '--'}
-                  </Badge>
-                  <Badge variant="secondary" className="bg-blue-500/10 text-blue-400">
-                    BMI: {bmi}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* Edit Form Modal */}
-      {isEditing && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          transition={{ duration: 0.3 }}
-        >
-          <Card className="glass-enhanced border-primary/20">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Edit3 className="h-5 w-5 text-primary" />
-                Persönliche Daten bearbeiten
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Name</Label>
-                    <Input
-                      id="name"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleInputChange}
-                      placeholder="Dein Name"
-                      className="glass-card border-primary/20"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="age">Alter</Label>
-                    <Input
-                      id="age"
-                      name="age"
-                      type="number"
-                      value={formData.age}
-                      onChange={handleInputChange}
-                      className="glass-card border-primary/20"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="height">Größe (cm)</Label>
-                    <Input
-                      id="height"
-                      name="height"
-                      type="number"
-                      step="0.1"
-                      value={formData.height}
-                      onChange={handleInputChange}
-                      className="glass-card border-primary/20"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="weight">Gewicht (kg)</Label>
-                    <Input
-                      id="weight"
-                      name="weight"
-                      type="number"
-                      step="0.1"
-                      value={formData.weight}
-                      onChange={handleInputChange}
-                      className="glass-card border-primary/20"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="bodyFat">Körperfett (%)</Label>
-                    <Input
-                      id="bodyFat"
-                      name="bodyFat"
-                      type="number"
-                      step="0.1"
-                      value={formData.bodyFat}
-                      onChange={handleInputChange}
-                      className="glass-card border-primary/20"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="calories">Kalorien / Tag</Label>
-                    <Input
-                      id="calories"
-                      name="calories"
-                      type="number"
-                      value={formData.calories}
-                      onChange={handleInputChange}
-                      className="glass-card border-primary/20"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="protein">Protein (g/Tag)</Label>
-                    <Input
-                      id="protein"
-                      name="protein"
-                      type="number"
-                      value={formData.protein}
-                      onChange={handleInputChange}
-                      className="glass-card border-primary/20"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="sleep">Schlaf (Stunden)</Label>
-                    <Input
-                      id="sleep"
-                      name="sleep"
-                      type="number"
-                      step="0.5"
-                      value={formData.sleep}
-                      onChange={handleInputChange}
-                      className="glass-card border-primary/20"
-                    />
-                  </div>
-                </div>
-                <Button type="submit" className="w-full">
-                  <Save className="h-4 w-4 mr-2" />
-                  Änderungen speichern
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
-
-      {/* Stats Grid */}
-      <motion.div 
-        className="grid gap-6 md:grid-cols-2 lg:grid-cols-4"
-        variants={itemVariants}
-      >
-        <Card className="glass-enhanced border-primary/20 hover:border-primary/40 transition-all duration-300">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-full bg-primary/10">
-                <Target className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">4-Jahres-Fortschritt</p>
-                <p className="text-2xl font-bold">{yearProgress.toFixed(0)}%</p>
-                <Progress value={yearProgress} className="h-2 mt-2" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="glass-enhanced border-green-500/20 hover:border-green-500/40 transition-all duration-300">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-full bg-green-500/10">
-                <TrendingUp className="h-6 w-6 text-green-400" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Gewichtszunahme</p>
-                <p className="text-2xl font-bold">{weight || '--'} kg</p>
-                <Progress value={weightProgress} className="h-2 mt-2" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="glass-enhanced border-blue-500/20 hover:border-blue-500/40 transition-all duration-300">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-full bg-blue-500/10">
-                <Calendar className="h-6 w-6 text-blue-400" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Tägliche Kalorien</p>
-                <p className="text-2xl font-bold">{formData.calories}</p>
-                <p className="text-sm text-muted-foreground">kcal/Tag</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="glass-enhanced border-purple-500/20 hover:border-purple-500/40 transition-all duration-300">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-full bg-purple-500/10">
-                <Award className="h-6 w-6 text-purple-400" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Tägliches Protein</p>
-                <p className="text-2xl font-bold">{formData.protein}g</p>
-                <p className="text-sm text-muted-foreground">
-                  {weight ? `(${(formData.protein / weight).toFixed(1)}g/kg)` : ''}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* Timeline & Milestones */}
-      <motion.div 
-        className="grid gap-6 lg:grid-cols-2"
-        variants={itemVariants}
-      >
-        <Card className="glass-enhanced border-primary/20">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Award className="h-5 w-5 text-primary" />
-              4-Jahres-Transformationsplan
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
+        {/* Persönliche Daten */}
+        <Card className="glass-card">
+          <CardHeader className="pb-3 sm:pb-6">
+            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+              <User className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+              Persönliche Daten
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {milestones.map((milestone, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ x: -20, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="flex items-center gap-4 p-4 rounded-lg bg-card/50 border border-border/50"
-                >
-                  <div className={`w-4 h-4 rounded-full ${milestone.color} ${formData.age >= milestone.age ? 'animate-pulse' : ''}`} />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold">{milestone.age} Jahre</span>
-                      <Badge variant="outline" className="text-xs">{milestone.weight}</Badge>
-                      <Badge variant="outline" className="text-xs">{milestone.bodyFat}</Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{milestone.note}</p>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Name</Label>
+              {editMode ? (
+                <Input
+                  id="name"
+                  value={tempProfile.name}
+                  onChange={(e) => setTempProfile(prev => ({ ...prev, name: e.target.value }))}
+                />
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-medium">{profile.name}</span>
+                  <Badge variant="secondary">User</Badge>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                Alter & Geburtstag
+              </Label>
+              {editMode ? (
+                <div className="space-y-2">
+                  <Input
+                    type="number"
+                    value={tempProfile.age}
+                    onChange={(e) => setTempProfile(prev => ({ ...prev, age: parseInt(e.target.value) }))}
+                    placeholder="Alter"
+                  />
+                  <Input
+                    type="date"
+                    value={tempProfile.birthday}
+                    onChange={(e) => setTempProfile(prev => ({ ...prev, birthday: e.target.value }))}
+                  />
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <div className="text-lg font-medium">{currentAge} Jahre</div>
+                  <div className="text-sm text-muted-foreground">
+                    Geburtstag: 06.06 {currentDate >= nextBirthday ? "(bereits gefeiert)" : "(nächster Geburtstag)"}
                   </div>
-                  {formData.age >= milestone.age && (
-                    <div className="text-green-400">
-                      <Award className="h-5 w-5" />
-                    </div>
-                  )}
-                </motion.div>
-              ))}
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            <div className="space-y-4">
+              <h4 className="font-medium text-sm text-muted-foreground">Körperdaten (automatisch synchronisiert)</h4>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Ruler className="h-4 w-4" />
+                    Größe
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-medium">{height || "—"} cm</span>
+                    <Badge variant="outline" className="text-xs">Auto</Badge>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Scale className="h-4 w-4" />
+                    Gewicht
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-medium">{weight || "—"} kg</span>
+                    <Badge variant="outline" className="text-xs">Auto</Badge>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Activity className="h-4 w-4" />
+                    Körperfett
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-medium">{bodyFat || "—"}%</span>
+                    <Badge variant="outline" className="text-xs">Auto</Badge>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>BMI</Label>
+                  <div className="text-lg font-medium">
+                    {bmi || "—"}
+                  </div>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="glass-enhanced border-primary/20">
-          <CardHeader>
-            <CardTitle>Ernährung & Supplements Übersicht</CardTitle>
+        {/* Ernährungsziele */}
+        <Card className="glass-card">
+          <CardHeader className="pb-3 sm:pb-6">
+            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+              <Target className="h-4 w-4 sm:h-5 sm:w-5 text-green-400" />
+              Ernährungsziele
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-4">
-              <div>
-                <h3 className="font-semibold mb-3 flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-primary" />
-                  Makronährstoffe
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
-                    <p className="text-sm text-muted-foreground">Kalorien</p>
-                    <p className="font-bold text-primary">{formData.calories} kcal</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-green-500/5 border border-green-500/20">
-                    <p className="text-sm text-muted-foreground">Protein</p>
-                    <p className="font-bold text-green-400">{formData.protein}g</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
-                    <p className="text-sm text-muted-foreground">Kohlenhydrate</p>
-                    <p className="font-bold text-blue-400">500-600g</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-orange-500/5 border border-orange-500/20">
-                    <p className="text-sm text-muted-foreground">Fette</p>
-                    <p className="font-bold text-orange-400">120-150g</p>
-                  </div>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="calories" className="flex items-center gap-2">
+                <Utensils className="h-4 w-4" />
+                Täglicher Kalorienbedarf
+              </Label>
+              {editMode ? (
+                <Input
+                  id="calories"
+                  type="number"
+                  value={tempProfile.dailyCalories}
+                  onChange={(e) => setTempProfile(prev => ({ ...prev, dailyCalories: parseInt(e.target.value) }))}
+                />
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-xl sm:text-2xl font-bold text-blue-400">{profile.dailyCalories}</span>
+                  <span className="text-muted-foreground">kcal/Tag</span>
                 </div>
-              </div>
+              )}
+            </div>
 
-              <Separator />
+            <div className="space-y-2">
+              <Label htmlFor="protein" className="flex items-center gap-2">
+                <Activity className="h-4 w-4" />
+                Proteinbedarf
+              </Label>
+              {editMode ? (
+                <Input
+                  id="protein"
+                  type="number"
+                  value={tempProfile.dailyProtein}
+                  onChange={(e) => setTempProfile(prev => ({ ...prev, dailyProtein: parseInt(e.target.value) }))}
+                />
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-xl sm:text-2xl font-bold text-green-400">{profile.dailyProtein}</span>
+                  <span className="text-muted-foreground">g/Tag</span>
+                </div>
+              )}
+            </div>
 
-              <div>
-                <h3 className="font-semibold mb-3 flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-green-400" />
-                  Basis-Supplements
-                </h3>
-                <div className="space-y-2 text-sm">
-                  {[
-                    { name: "Kreatin", dose: "5g/Tag", color: "bg-green-500/10 text-green-400" },
-                    { name: "Vitamin D3", dose: "1000-2000 IE", color: "bg-yellow-500/10 text-yellow-400" },
-                    { name: "Magnesium", dose: "400-600mg", color: "bg-blue-500/10 text-blue-400" },
-                    { name: "Omega-3", dose: "2-3g EPA/DHA", color: "bg-purple-500/10 text-purple-400" }
-                  ].map((supplement, index) => (
-                    <div key={index} className="flex justify-between items-center p-2 rounded border border-border/50">
-                      <span>{supplement.name}</span>
-                      <Badge className={supplement.color}>{supplement.dose}</Badge>
-                    </div>
-                  ))}
+            <Separator />
+
+            <div className="space-y-2">
+              <h4 className="font-medium text-sm text-muted-foreground">Berechnete Werte</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Protein/kg:</span>
+                  <span className="ml-2 font-medium">
+                    {weight ? (profile.dailyProtein / weight).toFixed(1) : "—"} g/kg
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Kcal/kg:</span>
+                  <span className="ml-2 font-medium">
+                    {weight ? (profile.dailyCalories / weight).toFixed(0) : "—"} kcal/kg
+                  </span>
                 </div>
               </div>
             </div>
           </CardContent>
         </Card>
-      </motion.div>
+      </div>
 
-      {/* Recommendation Banner */}
-      <motion.div variants={itemVariants}>
-        <Card className="glass-enhanced border-primary/20 bg-gradient-to-r from-primary/5 to-blue-400/5">
-          <CardContent className="p-6">
-            <div className="text-center">
-              <h3 className="text-xl font-semibold mb-2 text-primary flex items-center justify-center gap-2">
-                <Target className="h-6 w-6" />
-                Empfehlung für dein Alter ({formData.age} Jahre)
-              </h3>
-              <p className="text-muted-foreground max-w-2xl mx-auto">
-                Bleib natural und baue dir eine solide Basis auf! Fokussiere dich auf regelmäßiges Training, 
-                konstante Ernährung im Kalorienüberschuss und bewährte Supplements. Deine Transformation 
-                wird nachhaltig und gesund sein.
+      {/* GENESIS 4 Transformation */}
+      <Card className="glass-card">
+        <CardHeader className="pb-3 sm:pb-6">
+          <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+            <Target className="h-4 w-4 sm:h-5 sm:w-5 text-purple-400" />
+            GENESIS 4 Transformation - Jahr {currentTransformationYear}/4
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            {/* Current Status */}
+            <div className="grid gap-4 sm:gap-6 sm:grid-cols-3">
+              <div className="text-center p-4 border rounded-lg bg-card/50">
+                <div className="text-sm text-muted-foreground mb-2">Startgewicht</div>
+                <div className="text-xl sm:text-2xl font-bold text-blue-400">75 kg</div>
+                <div className="text-xs text-muted-foreground mt-1">Januar 2025</div>
+              </div>
+              
+              <div className="text-center p-4 border rounded-lg bg-card/50">
+                <div className="text-sm text-muted-foreground mb-2">Aktuell</div>
+                <div className="text-xl sm:text-2xl font-bold text-primary">
+                  {weight ? `${weight} kg` : "75 kg"}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {weight ? `+${(weight - 75).toFixed(1)} kg` : "Startphase"}
+                </div>
+              </div>
+              
+              <div className="text-center p-4 border rounded-lg bg-card/50">
+                <div className="text-sm text-muted-foreground mb-2">Zielgewicht</div>
+                <div className="text-xl sm:text-2xl font-bold text-green-400">100 kg</div>
+                <div className="text-xs text-muted-foreground mt-1">Dezember 2028</div>
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Transformation Fortschritt</span>
+                <span>{getTransformationProgress().toFixed(1)}%</span>
+              </div>
+              <div className="w-full bg-secondary rounded-full h-2">
+                <div 
+                  className="bg-gradient-to-r from-blue-400 to-green-400 h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${getTransformationProgress()}%` }}
+                ></div>
+              </div>
+            </div>
+            
+            <Separator />
+            
+            {/* Year Goals */}
+            <div className="grid gap-4 sm:gap-6 sm:grid-cols-2">
+              <div className="text-center p-4 border rounded-lg bg-card/50">
+                <div className="text-sm text-muted-foreground mb-2">Körperfett Start → Ziel</div>
+                <div className="text-lg sm:text-xl font-bold text-orange-400">12% → 8%</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Aktuell: {bodyFat ? `${bodyFat}%` : "— %"}
+                </div>
+              </div>
+              
+              <div className="text-center p-4 border rounded-lg bg-card/50">
+                <div className="text-sm text-muted-foreground mb-2">Lean Mass Zunahme (Ziel)</div>
+                <div className="text-lg sm:text-xl font-bold text-cyan-400">~22 kg</div>
+                <div className="text-xs text-muted-foreground mt-1">Reine Muskelmasse</div>
+              </div>
+            </div>
+
+            {/* Transformation Year Info */}
+            <div className="p-4 bg-primary/10 rounded-lg border border-primary/20">
+              <h4 className="font-medium text-primary mb-2">Jahr {currentTransformationYear} Fokus:</h4>
+              <p className="text-sm text-muted-foreground">
+                {currentTransformationYear === 1 && "Grundlagenaufbau, Technik perfektionieren, erste Masse aufbauen"}
+                {currentTransformationYear === 2 && "Intensivierung des Trainings, gezielter Muskelaufbau, Ernährungsoptimierung"}
+                {currentTransformationYear === 3 && "Fortgeschrittene Techniken, Kraft maximieren, Definition verbessern"}
+                {currentTransformationYear === 4 && "Finalphase, Perfektion der Physique, Ziele erreichen"}
               </p>
             </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Sync Info */}
+      <Card className="glass-card border border-primary/20">
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-2 h-2 bg-primary rounded-full animate-pulse flex-shrink-0"></div>
+            <div>
+              <p className="text-sm font-medium">Automatische Synchronisation aktiv</p>
+              <p className="text-xs text-muted-foreground">
+                Körperdaten werden automatisch aus dem Körper-Tracking übernommen und mit dem Dashboard synchronisiert
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

@@ -1,5 +1,4 @@
-
-import { useState, useRef } from "react";
+import React, { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,7 +18,10 @@ import {
   FilterIcon,
   GridIcon,
   CalendarIcon,
-  SearchIcon
+  SearchIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  XIcon
 } from "lucide-react";
 import { storageService, ProgressImage } from "@/services/storageService";
 import { toast } from "@/components/ui/use-toast";
@@ -27,11 +29,10 @@ import { toast } from "@/components/ui/use-toast";
 const Gallery = () => {
   const [images, setImages] = useState<ProgressImage[]>(() => storageService.getProgressImages());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<ProgressImage | null>(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterBy, setFilterBy] = useState<"all" | "favorites" | "recent">("all");
-  const [viewMode, setViewMode] = useState<"grid" | "timeline">("grid");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -79,7 +80,7 @@ const Gallery = () => {
   const deleteImage = (id: string) => {
     storageService.deleteProgressImage(id);
     setImages(storageService.getProgressImages());
-    setSelectedImage(null);
+    setSelectedImageIndex(null);
     
     toast({
       title: "🗑️ Bild gelöscht",
@@ -127,6 +128,51 @@ const Gallery = () => {
   }, {} as Record<string, ProgressImage[]>);
 
   const favoriteImages = images.filter(img => img.isFavorite);
+
+  // Navigation functions for fullscreen view
+  const navigateImage = (direction: 'prev' | 'next') => {
+    if (selectedImageIndex === null) return;
+    
+    const newIndex = direction === 'prev' 
+      ? (selectedImageIndex - 1 + filteredImages.length) % filteredImages.length
+      : (selectedImageIndex + 1) % filteredImages.length;
+    
+    setSelectedImageIndex(newIndex);
+  };
+
+  const openImageFullscreen = (image: ProgressImage) => {
+    const index = filteredImages.findIndex(img => img.id === image.id);
+    setSelectedImageIndex(index);
+  };
+
+  const closeFullscreen = () => {
+    setSelectedImageIndex(null);
+  };
+
+  // Handle keyboard navigation
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (selectedImageIndex === null) return;
+    
+    switch (e.key) {
+      case 'ArrowLeft':
+        navigateImage('prev');
+        break;
+      case 'ArrowRight':
+        navigateImage('next');
+        break;
+      case 'Escape':
+        closeFullscreen();
+        break;
+    }
+  };
+
+  // Add keyboard event listener
+  React.useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedImageIndex]);
+
+  const selectedImage = selectedImageIndex !== null ? filteredImages[selectedImageIndex] : null;
 
   return (
     <motion.div 
@@ -343,7 +389,7 @@ const Gallery = () => {
                                     src={image.image}
                                     alt={`Progress vom ${image.date}`}
                                     className="w-full h-full object-cover cursor-pointer"
-                                    onClick={() => setSelectedImage(image)}
+                                    onClick={() => openImageFullscreen(image)}
                                     whileHover={{ scale: 1.05 }}
                                     transition={{ duration: 0.2 }}
                                   />
@@ -401,77 +447,91 @@ const Gallery = () => {
         </div>
       )}
 
-      {/* Image Detail Modal */}
-      <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
-        <DialogContent className="max-w-4xl glass-enhanced">
-          {selectedImage && (
-            <div className="space-y-4">
-              <DialogHeader>
-                <DialogTitle className="flex items-center justify-between">
-                  <span>Progress-Foto</span>
+      {/* Fullscreen Image Modal */}
+      <AnimatePresence>
+        {selectedImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center"
+            onClick={closeFullscreen}
+          >
+            <div className="relative max-w-screen-lg max-h-screen-lg w-full h-full flex items-center justify-center p-4">
+              {/* Close Button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={closeFullscreen}
+                className="absolute top-4 right-4 z-10 bg-black/50 hover:bg-black/70 text-white"
+              >
+                <XIcon className="h-6 w-6" />
+              </Button>
+
+              {/* Navigation Buttons */}
+              {filteredImages.length > 1 && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigateImage('prev');
+                    }}
+                    className="absolute left-4 top-1/2 transform -translate-y-1/2 z-10 bg-black/50 hover:bg-black/70 text-white"
+                  >
+                    <ChevronLeftIcon className="h-6 w-6" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigateImage('next');
+                    }}
+                    className="absolute right-4 top-1/2 transform -translate-y-1/2 z-10 bg-black/50 hover:bg-black/70 text-white"
+                  >
+                    <ChevronRightIcon className="h-6 w-6" />
+                  </Button>
+                </>
+              )}
+
+              {/* Image */}
+              <motion.img
+                src={selectedImage.image}
+                alt={`Progress vom ${selectedImage.date}`}
+                className="max-w-full max-h-full object-contain"
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.3 }}
+                onClick={(e) => e.stopPropagation()}
+              />
+
+              {/* Image Info */}
+              <div className="absolute bottom-4 left-4 right-4 bg-black/70 rounded-lg p-4 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-medium">
+                      {format(new Date(selectedImage.date), "dd.MM.yyyy", { locale: de })} • {selectedImage.time}
+                    </h3>
+                    {selectedImage.notes && (
+                      <p className="text-sm text-white/80 mt-1">{selectedImage.notes}</p>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => toggleFavorite(selectedImage.id)}
-                      className={selectedImage.isFavorite ? 'text-red-400' : 'text-muted-foreground'}
-                    >
-                      <HeartIcon className={`h-5 w-5 ${selectedImage.isFavorite ? 'fill-current' : ''}`} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => deleteImage(selectedImage.id)}
-                      className="text-red-400 hover:bg-red-400/20"
-                    >
-                      <TrashIcon className="h-5 w-5" />
-                    </Button>
+                    {selectedImage.isFavorite && (
+                      <HeartIcon className="h-5 w-5 text-red-400 fill-current" />
+                    )}
+                    <span className="text-sm text-white/60">
+                      {(selectedImageIndex || 0) + 1} / {filteredImages.length}
+                    </span>
                   </div>
-                </DialogTitle>
-              </DialogHeader>
-              
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="aspect-square overflow-hidden rounded-lg border border-primary/20">
-                  <img
-                    src={selectedImage.image}
-                    alt={`Progress vom ${selectedImage.date}`}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                
-                <div className="space-y-4">
-                  <div className="glass-card p-4 rounded-lg">
-                    <h4 className="font-medium mb-2">📅 Details</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Datum:</span>
-                        <span>{format(new Date(selectedImage.date), "dd.MM.yyyy", { locale: de })}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Uhrzeit:</span>
-                        <span>{selectedImage.time}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Status:</span>
-                        <span>{selectedImage.isFavorite ? '❤️ Favorit' : '📸 Normal'}</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {selectedImage.notes && (
-                    <div className="glass-card p-4 rounded-lg">
-                      <h4 className="font-medium mb-2">📝 Notizen</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {selectedImage.notes}
-                      </p>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };
