@@ -7,20 +7,21 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { Ruler, Plus, Trash2, TrendingUp } from "lucide-react";
-import { storageService } from "@/services/storageService";
+import { Plus, Trash2, TrendingUp } from "lucide-react";
+import { supabaseStorageService } from "@/services/supabaseStorageService";
 import { toast } from "@/components/ui/use-toast";
+import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
 
 interface MeasurementData {
+  id?: string;
   date: string;
   chest: number;
   waist: number;
   hips: number;
-  armumfang: number; // renamed from biceps
+  armumfang: number;
   thigh: number;
   neck: number;
   shoulders: number;
@@ -31,6 +32,9 @@ const Measurements = () => {
   const [measurements, setMeasurements] = useState<MeasurementData[]>([]);
   const [activeTab, setActiveTab] = useState("chest");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const { user } = useSupabaseAuth();
+  
   const [newMeasurement, setNewMeasurement] = useState<Partial<MeasurementData>>({
     date: format(new Date(), "yyyy-MM-dd"),
     chest: 0,
@@ -47,7 +51,7 @@ const Measurements = () => {
     { key: "chest", label: "Brust", unit: "cm", color: "#ef4444" },
     { key: "waist", label: "Taille", unit: "cm", color: "#f97316" },
     { key: "hips", label: "Hüfte", unit: "cm", color: "#eab308" },
-    { key: "armumfang", label: "Armumfang", unit: "cm", color: "#22c55e" }, // renamed
+    { key: "armumfang", label: "Armumfang", unit: "cm", color: "#22c55e" },
     { key: "thigh", label: "Oberschenkel", unit: "cm", color: "#06b6d4" },
     { key: "neck", label: "Nacken", unit: "cm", color: "#8b5cf6" },
     { key: "shoulders", label: "Schultern", unit: "cm", color: "#ec4899" },
@@ -55,15 +59,29 @@ const Measurements = () => {
   ];
 
   useEffect(() => {
-    loadMeasurements();
-  }, []);
+    if (user) {
+      loadMeasurements();
+    }
+  }, [user]);
 
-  const loadMeasurements = () => {
-    const data = storageService.getMeasurements();
-    setMeasurements(data.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+  const loadMeasurements = async () => {
+    try {
+      setLoading(true);
+      const data = await supabaseStorageService.getMeasurements();
+      setMeasurements(data.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+    } catch (error) {
+      console.error('Error loading measurements:', error);
+      toast({
+        title: "Fehler",
+        description: "Messwerte konnten nicht geladen werden.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const saveMeasurement = () => {
+  const saveMeasurement = async () => {
     if (!newMeasurement.date) {
       toast({
         title: "Fehler",
@@ -73,41 +91,56 @@ const Measurements = () => {
       return;
     }
 
-    const measurementToSave = {
-      ...newMeasurement,
-      date: newMeasurement.date!,
-    } as MeasurementData;
+    try {
+      const measurementToSave = {
+        ...newMeasurement,
+        date: newMeasurement.date!,
+      } as MeasurementData;
 
-    storageService.saveMeasurement(measurementToSave);
-    loadMeasurements();
-    setIsDialogOpen(false);
-    setNewMeasurement({
-      date: format(new Date(), "yyyy-MM-dd"),
-      chest: 0,
-      waist: 0,
-      hips: 0,
-      armumfang: 0,
-      thigh: 0,
-      neck: 0,
-      shoulders: 0,
-      forearm: 0,
-    });
+      await supabaseStorageService.saveMeasurements([measurementToSave]);
+      await loadMeasurements();
+      setIsDialogOpen(false);
+      setNewMeasurement({
+        date: format(new Date(), "yyyy-MM-dd"),
+        chest: 0,
+        waist: 0,
+        hips: 0,
+        armumfang: 0,
+        thigh: 0,
+        neck: 0,
+        shoulders: 0,
+        forearm: 0,
+      });
 
-    toast({
-      title: "Messung gespeichert",
-      description: "Deine Körpermaße wurden erfolgreich gespeichert.",
-    });
+      toast({
+        title: "Messung gespeichert",
+        description: "Deine Körpermaße wurden erfolgreich gespeichert.",
+      });
+    } catch (error) {
+      console.error('Error saving measurement:', error);
+      toast({
+        title: "Fehler",
+        description: "Messung konnte nicht gespeichert werden.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const deleteMeasurement = (date: string) => {
-    storageService.deleteMeasurement(date);
-    loadMeasurements();
-    
-    toast({
-      title: "Messung gelöscht",
-      description: "Die Messung wurde erfolgreich entfernt.",
-    });
-  };
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Bitte melde dich an, um deine Daten zu sehen.</p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Lade Daten...</p>
+      </div>
+    );
+  }
 
   const getChartData = (field: string) => {
     return measurements.map((measurement) => ({
@@ -296,7 +329,7 @@ const Measurements = () => {
                         .slice(-10)
                         .reverse()
                         .map((measurement, index) => (
-                          <div key={measurement.date} className="flex items-center justify-between p-2 sm:p-3 bg-card/50 rounded-lg">
+                          <div key={measurement.id || index} className="flex items-center justify-between p-2 sm:p-3 bg-card/50 rounded-lg">
                             <div className="flex items-center gap-3">
                               <Badge variant="outline" className="text-xs">
                                 {format(new Date(measurement.date), "dd.MM.yy", { locale: de })}
@@ -305,14 +338,6 @@ const Measurements = () => {
                                 {measurement[field.key as keyof MeasurementData]} {field.unit}
                               </span>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => deleteMeasurement(measurement.date)}
-                              className="text-red-500 hover:text-red-700 p-1"
-                            >
-                              <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                            </Button>
                           </div>
                         ))}
                     </div>

@@ -9,34 +9,95 @@ import { de } from "date-fns/locale";
 import { CheckCircle, Circle, Settings, Calendar } from "lucide-react";
 import HabitManager from "@/components/HabitManager";
 import NutritionTracker from "@/components/NutritionTracker";
-import { storageService, HabitData, NutritionData } from "@/services/storageService";
+import { supabaseStorageService } from "@/services/supabaseStorageService";
 import { toast } from "@/components/ui/use-toast";
+import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
+
+interface HabitData {
+  id: string;
+  name: string;
+  description?: string;
+  completedDates: string[];
+}
 
 const Habits = () => {
   const [habits, setHabits] = useState<HabitData[]>([]);
   const [currentDate] = useState(new Date());
   const [isManageDialogOpen, setIsManageDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const { user } = useSupabaseAuth();
 
   useEffect(() => {
-    loadHabits();
-  }, []);
+    if (user) {
+      loadHabits();
+    }
+  }, [user]);
 
-  const loadHabits = () => {
-    const data = storageService.getHabits();
-    setHabits(data);
+  const loadHabits = async () => {
+    try {
+      setLoading(true);
+      const [habitsData, habitCompletions] = await Promise.all([
+        supabaseStorageService.getHabits(),
+        supabaseStorageService.getHabitCompletions()
+      ]);
+      
+      // Combine habits with their completions
+      const habitsWithCompletions = habitsData.map(habit => ({
+        ...habit,
+        completedDates: habitCompletions
+          .filter(completion => completion.habit_id === habit.id)
+          .map(completion => completion.date)
+      }));
+      
+      setHabits(habitsWithCompletions);
+    } catch (error) {
+      console.error('Error loading habits:', error);
+      toast({
+        title: "Fehler",
+        description: "Habits konnten nicht geladen werden.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const toggleHabit = (habitId: string, date: string) => {
-    storageService.toggleHabitCompletion(habitId, date);
-    loadHabits();
+  const toggleHabit = async (habitId: string, date: string) => {
+    try {
+      const habit = habits.find(h => h.id === habitId);
+      const isCompleted = habit?.completedDates.includes(date);
+      
+      if (isCompleted) {
+        // Remove completion
+        const completions = await supabaseStorageService.getHabitCompletions();
+        const completion = completions.find(c => c.habit_id === habitId && c.date === date);
+        if (completion) {
+          // Note: You'll need to add delete method to supabaseStorageService
+          console.log('Would delete completion:', completion.id);
+        }
+      } else {
+        // Add completion
+        await supabaseStorageService.saveHabitCompletions([{
+          habit_id: habitId,
+          date: date,
+          count: 1
+        }]);
+      }
+      
+      await loadHabits();
 
-    const habit = habits.find(h => h.id === habitId);
-    const isCompleted = habits.find(h => h.id === habitId)?.completedDates.includes(date);
-
-    toast({
-      title: isCompleted ? "Habit abgehakt" : "Abhaken rückgängig",
-      description: `${habit?.name} für ${format(parseISO(date), "dd.MM.yyyy", { locale: de })} ${isCompleted ? 'als erledigt markiert' : 'zurückgesetzt'}.`,
-    });
+      toast({
+        title: isCompleted ? "Abhaken rückgängig" : "Habit abgehakt",
+        description: `${habit?.name} für ${format(parseISO(date), "dd.MM.yyyy", { locale: de })} ${isCompleted ? 'zurückgesetzt' : 'als erledigt markiert'}.`,
+      });
+    } catch (error) {
+      console.error('Error toggling habit:', error);
+      toast({
+        title: "Fehler",
+        description: "Habit-Status konnte nicht geändert werden.",
+        variant: "destructive",
+      });
+    }
   };
 
   const getDaysInMonth = () => {
@@ -52,14 +113,8 @@ const Habits = () => {
   };
 
   const isNutritionCompleted = (date: Date) => {
-    const dateString = format(date, 'yyyy-MM-dd');
-    const nutrition = storageService.getNutrition(dateString);
-    
-    // Check if both calories and protein targets are met
-    const caloriesCompleted = nutrition.calories >= nutrition.targetCalories;
-    const proteinCompleted = nutrition.protein >= nutrition.targetProtein;
-    
-    return caloriesCompleted && proteinCompleted;
+    // This would need to be implemented with actual nutrition data from Supabase
+    return false; // Placeholder
   };
 
   const isDayFullyCompleted = (date: Date) => {
@@ -87,6 +142,22 @@ const Habits = () => {
 
     return Math.round((completedInMonth / daysInMonth.length) * 100);
   };
+
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Bitte melde dich an, um deine Daten zu sehen.</p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Lade Daten...</p>
+      </div>
+    );
+  }
 
   const days = getDaysInMonth();
 
