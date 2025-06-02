@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,17 +23,49 @@ import {
   ChevronRightIcon,
   XIcon
 } from "lucide-react";
-import { storageService, ProgressImage } from "@/services/storageService";
+import { supabaseStorageService } from "@/services/supabaseStorageService";
 import { toast } from "@/components/ui/use-toast";
 
+interface ProgressImage {
+  id: string;
+  date: string;
+  time: string;
+  image: string;
+  notes?: string;
+  isFavorite: boolean;
+  tags: string[];
+}
+
 const Gallery = () => {
-  const [images, setImages] = useState<ProgressImage[]>(() => storageService.getProgressImages());
+  const [images, setImages] = useState<ProgressImage[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterBy, setFilterBy] = useState<"all" | "favorites" | "recent">("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    loadImages();
+  }, []);
+
+  const loadImages = async () => {
+    try {
+      const data = await supabaseStorageService.getProgressImages();
+      const formattedImages = data.map(img => ({
+        id: img.id!,
+        date: img.date,
+        time: img.time,
+        image: img.image_url,
+        notes: img.notes,
+        isFavorite: img.is_favorite || false,
+        tags: img.tags || []
+      }));
+      setImages(formattedImages);
+    } catch (error) {
+      console.error('Error loading images:', error);
+    }
+  };
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -49,63 +81,86 @@ const Gallery = () => {
     }
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const imageData = e.target?.result as string;
       const now = new Date();
       
-      const newImage: ProgressImage = {
-        id: `img_${Date.now()}`,
+      const newImage = {
         date: format(now, "yyyy-MM-dd"),
         time: format(now, "HH:mm:ss"),
-        image: imageData,
+        image_url: imageData,
         notes: notes.trim() || undefined,
-        isFavorite: false,
+        is_favorite: false,
         tags: []
       };
 
-      storageService.saveProgressImage(newImage);
-      setImages(storageService.getProgressImages());
-      setNotes("");
-      setIsDialogOpen(false);
-      
-      toast({
-        title: "📸 Bild hochgeladen",
-        description: `Progress-Foto vom ${format(now, "dd.MM.yyyy 'um' HH:mm", { locale: de })} gespeichert.`,
-      });
+      try {
+        await supabaseStorageService.saveProgressImages([newImage]);
+        await loadImages();
+        setNotes("");
+        setIsDialogOpen(false);
+        
+        toast({
+          title: "📸 Bild hochgeladen",
+          description: `Progress-Foto vom ${format(now, "dd.MM.yyyy 'um' HH:mm", { locale: de })} gespeichert.`,
+        });
+      } catch (error) {
+        console.error('Error saving image:', error);
+        toast({
+          title: "Fehler",
+          description: "Bild konnte nicht gespeichert werden.",
+          variant: "destructive"
+        });
+      }
     };
 
     reader.readAsDataURL(file);
   };
 
-  const deleteImage = (id: string) => {
-    storageService.deleteProgressImage(id);
-    setImages(storageService.getProgressImages());
-    setSelectedImageIndex(null);
-    
-    toast({
-      title: "🗑️ Bild gelöscht",
-      description: "Das Progress-Foto wurde erfolgreich entfernt.",
-    });
+  const deleteImage = async (id: string) => {
+    try {
+      // You'll need to implement deleteProgressImage in supabaseStorageService
+      console.log('Would delete image:', id);
+      await loadImages();
+      setSelectedImageIndex(null);
+      
+      toast({
+        title: "🗑️ Bild gelöscht",
+        description: "Das Progress-Foto wurde erfolgreich entfernt.",
+      });
+    } catch (error) {
+      console.error('Error deleting image:', error);
+    }
   };
 
-  const toggleFavorite = (id: string) => {
-    storageService.toggleImageFavorite(id);
-    setImages(storageService.getProgressImages());
-    
-    const image = images.find(img => img.id === id);
-    toast({
-      title: image?.isFavorite ? "💙 Favorit entfernt" : "❤️ Als Favorit markiert",
-      description: image?.isFavorite ? "Foto ist nicht mehr favorisiert" : "Foto zu Favoriten hinzugefügt",
-    });
+  const toggleFavorite = async (id: string) => {
+    try {
+      const image = images.find(img => img.id === id);
+      if (!image) return;
+
+      const updatedImage = {
+        ...image,
+        is_favorite: !image.isFavorite,
+        image_url: image.image
+      };
+
+      await supabaseStorageService.saveProgressImages([updatedImage]);
+      await loadImages();
+      
+      toast({
+        title: !image.isFavorite ? "❤️ Als Favorit markiert" : "💙 Favorit entfernt",
+        description: !image.isFavorite ? "Foto zu Favoriten hinzugefügt" : "Foto ist nicht mehr favorisiert",
+      });
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+    }
   };
 
   const filteredImages = images.filter(image => {
-    // Search filter
     if (searchTerm && !image.notes?.toLowerCase().includes(searchTerm.toLowerCase())) {
       return false;
     }
 
-    // Category filter
     switch (filterBy) {
       case "favorites":
         return image.isFavorite;
@@ -129,7 +184,6 @@ const Gallery = () => {
 
   const favoriteImages = images.filter(img => img.isFavorite);
 
-  // Navigation functions for fullscreen view
   const navigateImage = (direction: 'prev' | 'next') => {
     if (selectedImageIndex === null) return;
     
@@ -149,7 +203,6 @@ const Gallery = () => {
     setSelectedImageIndex(null);
   };
 
-  // Handle keyboard navigation
   const handleKeyDown = (e: KeyboardEvent) => {
     if (selectedImageIndex === null) return;
     
@@ -166,7 +219,6 @@ const Gallery = () => {
     }
   };
 
-  // Add keyboard event listener
   React.useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);

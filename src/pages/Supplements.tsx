@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,8 +7,23 @@ import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { CheckCircle, Circle, Pill, Zap, Sun, Droplets, Shield, Activity, Dumbbell, Circle as CircleIcon, Settings } from "lucide-react";
-import { storageService, SupplementData, AdvancedSupplementsSettings } from "@/services/storageService";
+import { supabaseStorageService } from "@/services/supabaseStorageService";
 import { toast } from "@/components/ui/use-toast";
+
+interface SupplementData {
+  id: string;
+  name: string;
+  dosage: string;
+  timing: string;
+  category: string;
+  icon: string;
+  color: string;
+  taken: Record<string, boolean>;
+}
+
+interface AdvancedSupplementsSettings {
+  enabled: boolean;
+}
 
 const Supplements = () => {
   const [supplements, setSupplements] = useState<SupplementData[]>([]);
@@ -19,34 +35,87 @@ const Supplements = () => {
     loadAdvancedSettings();
   }, []);
 
-  const loadSupplements = () => {
-    const data = storageService.getSupplements();
-    setSupplements(data);
+  const loadSupplements = async () => {
+    try {
+      const [supplementsData, completionsData] = await Promise.all([
+        supabaseStorageService.getSupplements(),
+        supabaseStorageService.getSupplementCompletions()
+      ]);
+
+      // Map supplements with their completion status
+      const supplementsWithTaken = supplementsData.map(supplement => {
+        const taken: Record<string, boolean> = {};
+        completionsData
+          .filter(completion => completion.supplement_id === supplement.id)
+          .forEach(completion => {
+            taken[completion.date] = completion.taken || false;
+          });
+
+        return {
+          id: supplement.id!,
+          name: supplement.name,
+          dosage: supplement.dosage,
+          timing: supplement.timing,
+          category: supplement.category,
+          icon: supplement.icon,
+          color: supplement.color,
+          taken
+        };
+      });
+
+      setSupplements(supplementsWithTaken);
+    } catch (error) {
+      console.error('Error loading supplements:', error);
+    }
   };
 
   const loadAdvancedSettings = () => {
-    const settings = storageService.getAdvancedSupplementsSettings();
-    setAdvancedSettings(settings);
+    const stored = localStorage.getItem('advancedSupplementsSettings');
+    if (stored) {
+      setAdvancedSettings(JSON.parse(stored));
+    }
   };
 
-  const toggleSupplement = (supplementId: string) => {
+  const toggleSupplement = async (supplementId: string) => {
     const today = format(new Date(), 'yyyy-MM-dd');
-    storageService.toggleSupplementTaken(supplementId, today);
-    loadSupplements();
-
     const supplement = supplements.find(s => s.id === supplementId);
-    const wasTaken = supplement?.taken[today];
-    
-    toast({
-      title: wasTaken ? "Supplement eingenommen" : "Einnahme rückgängig",
-      description: `${supplement?.name} für heute ${wasTaken ? 'als eingenommen markiert' : 'zurückgesetzt'}.`,
-    });
+    if (!supplement) return;
+
+    const wasTaken = supplement.taken[today] || false;
+    const newTakenStatus = !wasTaken;
+
+    try {
+      await supabaseStorageService.saveSupplementCompletions([{
+        supplement_id: supplementId,
+        date: today,
+        taken: newTakenStatus
+      }]);
+
+      // Update local state
+      setSupplements(prev => prev.map(s => 
+        s.id === supplementId 
+          ? { ...s, taken: { ...s.taken, [today]: newTakenStatus } }
+          : s
+      ));
+
+      toast({
+        title: newTakenStatus ? "Supplement eingenommen" : "Einnahme rückgängig",
+        description: `${supplement.name} für heute ${newTakenStatus ? 'als eingenommen markiert' : 'zurückgesetzt'}.`,
+      });
+    } catch (error) {
+      console.error('Error toggling supplement:', error);
+      toast({
+        title: "Fehler",
+        description: "Supplement-Status konnte nicht aktualisiert werden.",
+        variant: "destructive"
+      });
+    }
   };
 
   const toggleAdvancedSupplements = (enabled: boolean) => {
     const newSettings = { enabled };
     setAdvancedSettings(newSettings);
-    storageService.saveAdvancedSupplementsSettings(newSettings);
+    localStorage.setItem('advancedSupplementsSettings', JSON.stringify(newSettings));
     
     toast({
       title: enabled ? "Ergänzungsmittel aktiviert" : "Ergänzungsmittel deaktiviert",
