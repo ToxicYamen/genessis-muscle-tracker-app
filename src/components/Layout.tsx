@@ -1,5 +1,4 @@
-
-import { useAuth } from "@/contexts/AuthContext";
+import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "react-router-dom";
 import { SidebarProvider, Sidebar, SidebarContent, SidebarTrigger } from "@/components/ui/sidebar";
@@ -11,7 +10,7 @@ interface LayoutProps {
 }
 
 export const Layout = ({ children }: LayoutProps) => {
-  const { logout } = useAuth();
+  const { signOut } = useSupabaseAuth();
   const location = useLocation();
   
   const navigation = [
@@ -79,7 +78,7 @@ export const Layout = ({ children }: LayoutProps) => {
               <Button
                 variant="outline"
                 className="w-full justify-start gap-2 text-muted-foreground rounded-lg hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50 transition-all duration-200"
-                onClick={logout}
+                onClick={signOut}
               >
                 <LogOut className="h-4 w-4" />
                 Abmelden

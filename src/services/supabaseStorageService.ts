@@ -1,564 +1,565 @@
-
 import { supabase } from "@/integrations/supabase/client";
-import { Database } from "@/integrations/supabase/types";
+import { useToast } from "@/components/ui/use-toast";
 
-type Tables = Database['public']['Tables'];
-type Profile = Tables['profiles']['Row'];
-type BodyMeasurement = Tables['body_measurements']['Row'];
-type Measurement = Tables['measurements']['Row'];
-type StrengthRecord = Tables['strength_records']['Row'];
-type ProgressImage = Tables['progress_images']['Row'];
-type Habit = Tables['habits']['Row'];
-type HabitCompletion = Tables['habit_completions']['Row'];
-type NutritionRecord = Tables['nutrition_records']['Row'];
-type Supplement = Tables['supplements']['Row'];
-type SupplementCompletion = Tables['supplement_completions']['Row'];
-type WorkoutPlan = Tables['workout_plans']['Row'];
-
-export interface SupabaseStorageService {
-  // Profile methods
-  getProfile(): Promise<Profile | null>;
-  updateProfile(profile: Partial<Profile>): Promise<void>;
-
-  // Body measurements
-  getBodyMeasurements(): Promise<BodyMeasurement[]>;
-  saveBodyMeasurement(measurement: Omit<BodyMeasurement, 'id' | 'user_id' | 'created_at'>): Promise<void>;
-  deleteBodyMeasurement(id: string): Promise<void>;
-
-  // Measurements
-  getMeasurements(): Promise<Measurement[]>;
-  saveMeasurement(measurement: Omit<Measurement, 'id' | 'user_id' | 'created_at'>): Promise<void>;
-  deleteMeasurement(id: string): Promise<void>;
-
-  // Strength records
-  getStrengthRecords(): Promise<StrengthRecord[]>;
-  saveStrengthRecord(record: Omit<StrengthRecord, 'id' | 'user_id' | 'created_at'>): Promise<void>;
-  deleteStrengthRecord(id: string): Promise<void>;
-
-  // Progress images
-  getProgressImages(): Promise<ProgressImage[]>;
-  saveProgressImage(image: Omit<ProgressImage, 'id' | 'user_id' | 'created_at'>): Promise<void>;
-  deleteProgressImage(id: string): Promise<void>;
-  toggleImageFavorite(id: string): Promise<void>;
-
-  // Habits
-  getHabits(): Promise<Habit[]>;
-  saveHabit(habit: Omit<Habit, 'id' | 'user_id' | 'created_at'>): Promise<void>;
-  deleteHabit(id: string): Promise<void>;
-
-  // Habit completions
-  getHabitCompletions(): Promise<HabitCompletion[]>;
-  saveHabitCompletion(completion: Omit<HabitCompletion, 'id' | 'user_id' | 'created_at'>): Promise<void>;
-  toggleHabitCompletion(habitId: string, date: string, count?: number): Promise<void>;
-
-  // Nutrition
-  getNutritionRecords(): Promise<NutritionRecord[]>;
-  getNutritionRecord(date: string): Promise<NutritionRecord | null>;
-  saveNutritionRecord(record: Omit<NutritionRecord, 'id' | 'user_id' | 'created_at'>): Promise<void>;
-
-  // Supplements
-  getSupplements(): Promise<Supplement[]>;
-  saveSupplements(supplements: Omit<Supplement, 'id' | 'user_id' | 'created_at'>[]): Promise<void>;
-  
-  // Supplement completions
-  getSupplementCompletions(): Promise<SupplementCompletion[]>;
-  toggleSupplementCompletion(supplementId: string, date: string): Promise<void>;
-
-  // Workout plans
-  getWorkoutPlans(): Promise<WorkoutPlan[]>;
-  saveWorkoutPlan(plan: Omit<WorkoutPlan, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<void>;
-
-  // Data migration
-  migrateLocalStorageData(): Promise<void>;
+export interface Profile {
+  id: string;
+  username: string;
+  full_name: string;
+  avatar_url?: string;
+  updated_at?: string;
 }
 
-class SupabaseStorageServiceImpl implements SupabaseStorageService {
-  private async getCurrentUserId(): Promise<string> {
+export interface BodyMeasurement {
+  id?: string;
+  date: string;
+  weight: number;
+  height: number;
+  body_fat?: number;
+  muscle_mass?: number;
+  user_id?: string;
+}
+
+export interface Measurement {
+  id?: string;
+  date: string;
+  chest?: number;
+  waist?: number;
+  hips?: number;
+  arm_left?: number;
+  arm_right?: number;
+  leg_left?: number;
+  leg_right?: number;
+  user_id?: string;
+}
+
+export interface StrengthRecord {
+  id?: string;
+  date: string;
+  exercise: string;
+  weight: number;
+  reps: number;
+  sets: number;
+  user_id?: string;
+}
+
+export interface ProgressImage {
+  id?: string;
+  date: string;
+  image_url: string;
+  description?: string;
+  user_id?: string;
+}
+
+export interface Habit {
+  id?: string;
+  name: string;
+  description?: string;
+  frequency: string;
+  goal: number;
+  user_id?: string;
+}
+
+export interface HabitCompletion {
+  id?: string;
+  habit_id: string;
+  date: string;
+  quantity: number;
+  completed: boolean;
+  user_id?: string;
+}
+
+export interface NutritionRecord {
+  id?: string;
+  date: string;
+  food: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  user_id?: string;
+}
+
+export interface Supplement {
+  id?: string;
+  name: string;
+  dosage: string;
+  time: string;
+  user_id?: string;
+}
+
+export interface SupplementCompletion {
+  id?: string;
+  supplement_id: string;
+  date: string;
+  taken: boolean;
+  user_id?: string;
+}
+
+export interface WorkoutPlan {
+  id?: string;
+  name: string;
+  description?: string;
+  days: any[];
+  nutrition: any[];
+  user_id?: string;
+}
+
+export const supabaseStorageService = {
+  // Profiles
+  async saveProfile(profileData: any) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
-    return user.id;
-  }
 
-  // Profile methods
-  async getProfile(): Promise<Profile | null> {
-    const userId = await this.getCurrentUserId();
     const { data, error } = await supabase
       .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
-    
-    if (error) throw error;
-    return data;
-  }
-
-  async updateProfile(profile: Partial<Profile>): Promise<void> {
-    const userId = await this.getCurrentUserId();
-    const { error } = await supabase
-      .from('profiles')
-      .upsert({ ...profile, id: userId, updated_at: new Date().toISOString() });
-    
-    if (error) throw error;
-  }
-
-  // Body measurements
-  async getBodyMeasurements(): Promise<BodyMeasurement[]> {
-    const userId = await this.getCurrentUserId();
-    const { data, error } = await supabase
-      .from('body_measurements')
-      .select('*')
-      .eq('user_id', userId)
-      .order('date', { ascending: false });
-    
-    if (error) throw error;
-    return data || [];
-  }
-
-  async saveBodyMeasurement(measurement: Omit<BodyMeasurement, 'id' | 'user_id' | 'created_at'>): Promise<void> {
-    const userId = await this.getCurrentUserId();
-    const { error } = await supabase
-      .from('body_measurements')
-      .upsert({ ...measurement, user_id: userId });
-    
-    if (error) throw error;
-  }
-
-  async deleteBodyMeasurement(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('body_measurements')
-      .delete()
-      .eq('id', id);
-    
-    if (error) throw error;
-  }
-
-  // Measurements
-  async getMeasurements(): Promise<Measurement[]> {
-    const userId = await this.getCurrentUserId();
-    const { data, error } = await supabase
-      .from('measurements')
-      .select('*')
-      .eq('user_id', userId)
-      .order('date', { ascending: false });
-    
-    if (error) throw error;
-    return data || [];
-  }
-
-  async saveMeasurement(measurement: Omit<Measurement, 'id' | 'user_id' | 'created_at'>): Promise<void> {
-    const userId = await this.getCurrentUserId();
-    const { error } = await supabase
-      .from('measurements')
-      .upsert({ ...measurement, user_id: userId });
-    
-    if (error) throw error;
-  }
-
-  async deleteMeasurement(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('measurements')
-      .delete()
-      .eq('id', id);
-    
-    if (error) throw error;
-  }
-
-  // Strength records
-  async getStrengthRecords(): Promise<StrengthRecord[]> {
-    const userId = await this.getCurrentUserId();
-    const { data, error } = await supabase
-      .from('strength_records')
-      .select('*')
-      .eq('user_id', userId)
-      .order('date', { ascending: false });
-    
-    if (error) throw error;
-    return data || [];
-  }
-
-  async saveStrengthRecord(record: Omit<StrengthRecord, 'id' | 'user_id' | 'created_at'>): Promise<void> {
-    const userId = await this.getCurrentUserId();
-    const { error } = await supabase
-      .from('strength_records')
-      .upsert({ ...record, user_id: userId });
-    
-    if (error) throw error;
-  }
-
-  async deleteStrengthRecord(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('strength_records')
-      .delete()
-      .eq('id', id);
-    
-    if (error) throw error;
-  }
-
-  // Progress images
-  async getProgressImages(): Promise<ProgressImage[]> {
-    const userId = await this.getCurrentUserId();
-    const { data, error } = await supabase
-      .from('progress_images')
-      .select('*')
-      .eq('user_id', userId)
-      .order('date', { ascending: false });
-    
-    if (error) throw error;
-    return data || [];
-  }
-
-  async saveProgressImage(image: Omit<ProgressImage, 'id' | 'user_id' | 'created_at'>): Promise<void> {
-    const userId = await this.getCurrentUserId();
-    const { error } = await supabase
-      .from('progress_images')
-      .insert({ ...image, user_id: userId });
-    
-    if (error) throw error;
-  }
-
-  async deleteProgressImage(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('progress_images')
-      .delete()
-      .eq('id', id);
-    
-    if (error) throw error;
-  }
-
-  async toggleImageFavorite(id: string): Promise<void> {
-    const { data } = await supabase
-      .from('progress_images')
-      .select('is_favorite')
-      .eq('id', id)
-      .single();
-    
-    const { error } = await supabase
-      .from('progress_images')
-      .update({ is_favorite: !data?.is_favorite })
-      .eq('id', id);
-    
-    if (error) throw error;
-  }
-
-  // Habits
-  async getHabits(): Promise<Habit[]> {
-    const userId = await this.getCurrentUserId();
-    const { data, error } = await supabase
-      .from('habits')
-      .select('*')
-      .eq('user_id', userId);
-    
-    if (error) throw error;
-    return data || [];
-  }
-
-  async saveHabit(habit: Omit<Habit, 'id' | 'user_id' | 'created_at'>): Promise<void> {
-    const userId = await this.getCurrentUserId();
-    const { error } = await supabase
-      .from('habits')
-      .upsert({ ...habit, user_id: userId });
-    
-    if (error) throw error;
-  }
-
-  async deleteHabit(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('habits')
-      .delete()
-      .eq('id', id);
-    
-    if (error) throw error;
-  }
-
-  // Habit completions
-  async getHabitCompletions(): Promise<HabitCompletion[]> {
-    const userId = await this.getCurrentUserId();
-    const { data, error } = await supabase
-      .from('habit_completions')
-      .select('*')
-      .eq('user_id', userId);
-    
-    if (error) throw error;
-    return data || [];
-  }
-
-  async saveHabitCompletion(completion: Omit<HabitCompletion, 'id' | 'user_id' | 'created_at'>): Promise<void> {
-    const userId = await this.getCurrentUserId();
-    const { error } = await supabase
-      .from('habit_completions')
-      .upsert({ ...completion, user_id: userId });
-    
-    if (error) throw error;
-  }
-
-  async toggleHabitCompletion(habitId: string, date: string, count: number = 1): Promise<void> {
-    const userId = await this.getCurrentUserId();
-    
-    const { data: existing } = await supabase
-      .from('habit_completions')
-      .select('*')
-      .eq('habit_id', habitId)
-      .eq('date', date)
-      .maybeSingle();
-
-    if (existing) {
-      const { error } = await supabase
-        .from('habit_completions')
-        .delete()
-        .eq('id', existing.id);
-      if (error) throw error;
-    } else {
-      const { error } = await supabase
-        .from('habit_completions')
-        .insert({ habit_id: habitId, date, count, user_id: userId });
-      if (error) throw error;
-    }
-  }
-
-  // Nutrition
-  async getNutritionRecords(): Promise<NutritionRecord[]> {
-    const userId = await this.getCurrentUserId();
-    const { data, error } = await supabase
-      .from('nutrition_records')
-      .select('*')
-      .eq('user_id', userId)
-      .order('date', { ascending: false });
-    
-    if (error) throw error;
-    return data || [];
-  }
-
-  async getNutritionRecord(date: string): Promise<NutritionRecord | null> {
-    const userId = await this.getCurrentUserId();
-    const { data, error } = await supabase
-      .from('nutrition_records')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('date', date)
-      .maybeSingle();
-    
-    if (error) throw error;
-    return data;
-  }
-
-  async saveNutritionRecord(record: Omit<NutritionRecord, 'id' | 'user_id' | 'created_at'>): Promise<void> {
-    const userId = await this.getCurrentUserId();
-    const { error } = await supabase
-      .from('nutrition_records')
-      .upsert({ ...record, user_id: userId });
-    
-    if (error) throw error;
-  }
-
-  // Supplements
-  async getSupplements(): Promise<Supplement[]> {
-    const userId = await this.getCurrentUserId();
-    const { data, error } = await supabase
-      .from('supplements')
-      .select('*')
-      .eq('user_id', userId);
-    
-    if (error) throw error;
-    return data || [];
-  }
-
-  async saveSupplements(supplements: Omit<Supplement, 'id' | 'user_id' | 'created_at'>[]): Promise<void> {
-    const userId = await this.getCurrentUserId();
-    const supplementsWithUserId = supplements.map(supplement => ({
-      ...supplement,
-      user_id: userId
-    }));
-    
-    const { error } = await supabase
-      .from('supplements')
-      .upsert(supplementsWithUserId);
-    
-    if (error) throw error;
-  }
-
-  // Supplement completions
-  async getSupplementCompletions(): Promise<SupplementCompletion[]> {
-    const userId = await this.getCurrentUserId();
-    const { data, error } = await supabase
-      .from('supplement_completions')
-      .select('*')
-      .eq('user_id', userId);
-    
-    if (error) throw error;
-    return data || [];
-  }
-
-  async toggleSupplementCompletion(supplementId: string, date: string): Promise<void> {
-    const userId = await this.getCurrentUserId();
-    
-    const { data: existing } = await supabase
-      .from('supplement_completions')
-      .select('*')
-      .eq('supplement_id', supplementId)
-      .eq('date', date)
-      .maybeSingle();
-
-    if (existing) {
-      const { error } = await supabase
-        .from('supplement_completions')
-        .update({ taken: !existing.taken })
-        .eq('id', existing.id);
-      if (error) throw error;
-    } else {
-      const { error } = await supabase
-        .from('supplement_completions')
-        .insert({ supplement_id: supplementId, date, taken: true, user_id: userId });
-      if (error) throw error;
-    }
-  }
-
-  // Workout plans
-  async getWorkoutPlans(): Promise<WorkoutPlan[]> {
-    const userId = await this.getCurrentUserId();
-    const { data, error } = await supabase
-      .from('workout_plans')
-      .select('*')
-      .eq('user_id', userId);
-    
-    if (error) throw error;
-    return data || [];
-  }
-
-  async saveWorkoutPlan(plan: Omit<WorkoutPlan, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<void> {
-    const userId = await this.getCurrentUserId();
-    const { error } = await supabase
-      .from('workout_plans')
-      .upsert({ 
-        ...plan, 
-        user_id: userId,
+      .upsert({
+        id: user.id,
+        ...profileData,
         updated_at: new Date().toISOString()
       });
-    
-    if (error) throw error;
-  }
 
-  // Data migration from localStorage
-  async migrateLocalStorageData(): Promise<void> {
+    if (error) throw error;
+    return data;
+  },
+
+  async getProfile() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    return data;
+  },
+
+  // Body Measurements
+  async saveBodyMeasurements(measurements: any[]) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const measurementsWithUserId = measurements.map(measurement => ({
+      ...measurement,
+      user_id: user.id
+    }));
+
+    const { data, error } = await supabase
+      .from('body_measurements')
+      .upsert(measurementsWithUserId);
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getBodyMeasurements() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('body_measurements')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('date', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Measurements
+  async saveMeasurements(measurements: any[]) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const measurementsWithUserId = measurements.map(measurement => ({
+      ...measurement,
+      user_id: user.id
+    }));
+
+    const { data, error } = await supabase
+      .from('measurements')
+      .upsert(measurementsWithUserId);
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getMeasurements() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('measurements')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('date', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Strength Records
+  async saveStrengthRecords(records: any[]) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const recordsWithUserId = records.map(record => ({
+      ...record,
+      user_id: user.id
+    }));
+
+    const { data, error } = await supabase
+      .from('strength_records')
+      .upsert(recordsWithUserId);
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getStrengthRecords() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('strength_records')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('date', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Progress Images
+  async saveProgressImages(images: any[]) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const imagesWithUserId = images.map(image => ({
+      ...image,
+      user_id: user.id
+    }));
+
+    const { data, error } = await supabase
+      .from('progress_images')
+      .upsert(imagesWithUserId);
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getProgressImages() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('progress_images')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('date', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Habits
+  async saveHabits(habits: any[]) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const habitsWithUserId = habits.map(habit => ({
+      ...habit,
+      user_id: user.id
+    }));
+
+    const { data, error } = await supabase
+      .from('habits')
+      .upsert(habitsWithUserId);
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getHabits() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('habits')
+      .select('*')
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Habit Completions
+  async saveHabitCompletions(completions: any[]) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const completionsWithUserId = completions.map(completion => ({
+      ...completion,
+      user_id: user.id
+    }));
+
+    const { data, error } = await supabase
+      .from('habit_completions')
+      .upsert(completionsWithUserId);
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getHabitCompletions() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('habit_completions')
+      .select('*')
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Nutrition Records
+  async saveNutritionRecords(records: any[]) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const recordsWithUserId = records.map(record => ({
+      ...record,
+      user_id: user.id
+    }));
+
+    const { data, error } = await supabase
+      .from('nutrition_records')
+      .upsert(recordsWithUserId);
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getNutritionRecords() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('nutrition_records')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('date', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Supplements
+  async saveSupplements(supplements: any[]) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const supplementsWithUserId = supplements.map(supplement => ({
+      ...supplement,
+      user_id: user.id
+    }));
+
+    const { data, error } = await supabase
+      .from('supplements')
+      .upsert(supplementsWithUserId);
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getSupplements() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('supplements')
+      .select('*')
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Supplement Completions
+  async saveSupplementCompletions(completions: any[]) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const completionsWithUserId = completions.map(completion => ({
+      ...completion,
+      user_id: user.id
+    }));
+
+    const { data, error } = await supabase
+      .from('supplement_completions')
+      .upsert(completionsWithUserId);
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getSupplementCompletions() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('supplement_completions')
+      .select('*')
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Workout Plans
+  async saveWorkoutPlans(plans: any[]) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const plansWithUserId = plans.map(plan => ({
+      ...plan,
+      user_id: user.id,
+      days: JSON.stringify(plan.days),
+      nutrition: JSON.stringify(plan.nutrition)
+    }));
+
+    const { data, error } = await supabase
+      .from('workout_plans')
+      .upsert(plansWithUserId);
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getWorkoutPlans() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('workout_plans')
+      .select('*')
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+    
+    return (data || []).map(plan => ({
+      ...plan,
+      days: typeof plan.days === 'string' ? JSON.parse(plan.days) : plan.days,
+      nutrition: typeof plan.nutrition === 'string' ? JSON.parse(plan.nutrition) : plan.nutrition
+    }));
+  },
+
+  // Migration function
+  async migrateLocalStorageData() {
     console.log('Starting localStorage migration to Supabase...');
     
     try {
-      // Import existing storageService to get localStorage data
-      const { storageService } = await import('./storageService');
-      
-      // Migrate profile data
-      const localPersonalData = localStorage.getItem('personalData');
-      if (localPersonalData) {
-        const personalData = JSON.parse(localPersonalData);
-        await this.updateProfile({
-          name: personalData.name,
-          age: personalData.age,
-          height: personalData.height,
-          weight: personalData.weight,
-          body_fat: personalData.bodyFat,
-          calories: personalData.calories,
-          protein: personalData.protein,
-          sleep: personalData.sleep,
-          training_days: personalData.trainingDays
-        });
-      }
+      // Get all localStorage data
+      const profileData = localStorage.getItem('profile');
+      const bodyMeasurementsData = localStorage.getItem('bodyMeasurements');
+      const measurementsData = localStorage.getItem('measurements');
+      const strengthData = localStorage.getItem('strengthData');
+      const progressImagesData = localStorage.getItem('progressImages');
+      const habitsData = localStorage.getItem('habits');
+      const habitCompletionsData = localStorage.getItem('habitCompletions');
+      const nutritionData = localStorage.getItem('nutritionData');
+      const supplementsData = localStorage.getItem('supplements');
+      const supplementCompletionsData = localStorage.getItem('supplementCompletions');
+      const workoutPlansData = localStorage.getItem('workoutPlans');
 
-      // Migrate habits
-      const localHabits = storageService.getHabits();
-      if (localHabits.length > 0) {
-        for (const habit of localHabits) {
-          await this.saveHabit({
-            name: habit.name,
-            icon: habit.icon,
-            target: habit.target,
-            description: habit.description || ''
-          });
-        }
+      // Migrate profile
+      if (profileData) {
+        await this.saveProfile(JSON.parse(profileData));
+        console.log('Profile data migrated');
       }
 
       // Migrate body measurements
-      const localBodyMeasurements = storageService.getBodyMeasurements();
-      if (localBodyMeasurements.length > 0) {
-        for (const measurement of localBodyMeasurements) {
-          await this.saveBodyMeasurement({
-            date: measurement.date,
-            weight: measurement.weight,
-            height: measurement.height,
-            body_fat: measurement.bodyFat,
-            muscle_mass: measurement.muscleMass,
-            chest: measurement.chest,
-            waist: measurement.waist,
-            arms: measurement.arms,
-            thighs: measurement.thighs,
-            shoulders: measurement.shoulders,
-            notes: measurement.notes
-          });
-        }
+      if (bodyMeasurementsData) {
+        await this.saveBodyMeasurements(JSON.parse(bodyMeasurementsData));
+        console.log('Body measurements migrated');
       }
 
       // Migrate measurements
-      const localMeasurements = storageService.getMeasurements();
-      if (localMeasurements.length > 0) {
-        for (const measurement of localMeasurements) {
-          await this.saveMeasurement({
-            date: measurement.date,
-            chest: measurement.chest,
-            waist: measurement.waist,
-            hips: measurement.hips,
-            armumfang: measurement.armumfang,
-            thigh: measurement.thigh,
-            neck: measurement.neck,
-            shoulders: measurement.shoulders,
-            forearm: measurement.forearm
-          });
-        }
+      if (measurementsData) {
+        await this.saveMeasurements(JSON.parse(measurementsData));
+        console.log('Measurements migrated');
       }
 
-      // Migrate strength records
-      const localStrengthData = storageService.getStrengthData();
-      if (localStrengthData.length > 0) {
-        for (const record of localStrengthData) {
-          await this.saveStrengthRecord({
-            date: record.date,
-            exercise: record.exercise,
-            sets: record.sets,
-            reps: record.reps,
-            weight: record.weight,
-            notes: record.notes
-          });
-        }
+      // Migrate strength data
+      if (strengthData) {
+        await this.saveStrengthRecords(JSON.parse(strengthData));
+        console.log('Strength data migrated');
+      }
+
+      // Migrate progress images
+      if (progressImagesData) {
+        await this.saveProgressImages(JSON.parse(progressImagesData));
+        console.log('Progress images migrated');
+      }
+
+      // Migrate habits
+      if (habitsData) {
+        await this.saveHabits(JSON.parse(habitsData));
+        console.log('Habits migrated');
+      }
+
+      // Migrate habit completions
+      if (habitCompletionsData) {
+        await this.saveHabitCompletions(JSON.parse(habitCompletionsData));
+        console.log('Habit completions migrated');
+      }
+
+      // Migrate nutrition data
+      if (nutritionData) {
+        await this.saveNutritionRecords(JSON.parse(nutritionData));
+        console.log('Nutrition data migrated');
       }
 
       // Migrate supplements
-      const localSupplements = storageService.getSupplements();
-      if (localSupplements.length > 0) {
-        const supplementsToMigrate = localSupplements.map(supplement => ({
-          name: supplement.name,
-          dosage: supplement.dosage,
-          timing: supplement.timing,
-          category: supplement.category,
-          icon: supplement.icon,
-          color: supplement.color
-        }));
-        await this.saveSupplements(supplementsToMigrate);
+      if (supplementsData) {
+        await this.saveSupplements(JSON.parse(supplementsData));
+        console.log('Supplements migrated');
       }
 
-      // Migrate workout plan
-      const localWorkout = storageService.getWorkoutData();
-      if (localWorkout) {
-        await this.saveWorkoutPlan({
-          split_name: localWorkout.splitName,
-          days: localWorkout.days,
-          supplements: localWorkout.supplements,
-          nutrition: localWorkout.nutrition
-        });
+      // Migrate supplement completions
+      if (supplementCompletionsData) {
+        await this.saveSupplementCompletions(JSON.parse(supplementCompletionsData));
+        console.log('Supplement completions migrated');
+      }
+
+      // Migrate workout plans
+      if (workoutPlansData) {
+        await this.saveWorkoutPlans(JSON.parse(workoutPlansData));
+        console.log('Workout plans migrated');
       }
 
       console.log('Migration completed successfully!');
+      
+      // Clear localStorage after successful migration
+      localStorage.removeItem('profile');
+      localStorage.removeItem('bodyMeasurements');
+      localStorage.removeItem('measurements');
+      localStorage.removeItem('strengthData');
+      localStorage.removeItem('progressImages');
+      localStorage.removeItem('habits');
+      localStorage.removeItem('habitCompletions');
+      localStorage.removeItem('nutritionData');
+      localStorage.removeItem('supplements');
+      localStorage.removeItem('supplementCompletions');
+      localStorage.removeItem('workoutPlans');
+      
     } catch (error) {
-      console.error('Migration error:', error);
+      console.error('Migration failed:', error);
       throw error;
     }
   }
-}
-
-export const supabaseStorageService = new SupabaseStorageServiceImpl();
+};
