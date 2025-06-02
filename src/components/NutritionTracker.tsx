@@ -6,18 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Plus, Utensils } from "lucide-react";
-import { supabaseStorageService } from "@/services/supabaseStorageService";
+import { storageService, NutritionData } from "@/services/storageService";
 import { toast } from "@/components/ui/use-toast";
 import { format } from "date-fns";
-
-interface NutritionData {
-  calories: number;
-  protein: number;
-  water: number;
-  targetCalories: number;
-  targetProtein: number;
-  targetWater: number;
-}
 
 const NutritionTracker = () => {
   const [nutrition, setNutrition] = useState<NutritionData>({
@@ -37,52 +28,17 @@ const NutritionTracker = () => {
     loadNutrition();
   }, []);
 
-  const loadNutrition = async () => {
-    try {
-      const records = await supabaseStorageService.getNutritionRecords();
-      const todayRecord = records.find(record => record.date === today);
-      
-      if (todayRecord) {
-        setNutrition({
-          calories: todayRecord.calories || 0,
-          protein: todayRecord.protein || 0,
-          water: todayRecord.water || 0,
-          targetCalories: todayRecord.target_calories || 4864,
-          targetProtein: todayRecord.target_protein || 280,
-          targetWater: todayRecord.target_water || 4000
-        });
-      }
-    } catch (error) {
-      console.error('Error loading nutrition:', error);
-    }
+  const loadNutrition = () => {
+    const data = storageService.getNutrition(today);
+    setNutrition(data);
   };
 
-  const saveNutrition = async (updatedNutrition: NutritionData) => {
-    try {
-      await supabaseStorageService.saveNutritionRecords([{
-        date: today,
-        calories: updatedNutrition.calories,
-        protein: updatedNutrition.protein,
-        water: updatedNutrition.water,
-        target_calories: updatedNutrition.targetCalories,
-        target_protein: updatedNutrition.targetProtein,
-        target_water: updatedNutrition.targetWater
-      }]);
-    } catch (error) {
-      console.error('Error saving nutrition:', error);
-    }
-  };
-
-  const addCalories = async () => {
+  const addCalories = () => {
     if (calorieInput && !isNaN(Number(calorieInput))) {
       const amount = Number(calorieInput);
-      const updatedNutrition = {
-        ...nutrition,
-        calories: nutrition.calories + amount
-      };
-      setNutrition(updatedNutrition);
-      await saveNutrition(updatedNutrition);
+      storageService.addNutritionValue(today, 'calories', amount);
       setCalorieInput("");
+      loadNutrition();
       toast({
         title: "Kalorien hinzugefügt",
         description: `${amount} kcal wurden hinzugefügt.`,
@@ -90,16 +46,12 @@ const NutritionTracker = () => {
     }
   };
 
-  const addProtein = async () => {
+  const addProtein = () => {
     if (proteinInput && !isNaN(Number(proteinInput))) {
       const amount = Number(proteinInput);
-      const updatedNutrition = {
-        ...nutrition,
-        protein: nutrition.protein + amount
-      };
-      setNutrition(updatedNutrition);
-      await saveNutrition(updatedNutrition);
+      storageService.addNutritionValue(today, 'protein', amount);
       setProteinInput("");
+      loadNutrition();
       toast({
         title: "Protein hinzugefügt",
         description: `${amount}g Protein wurden hinzugefügt.`,

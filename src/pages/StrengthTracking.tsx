@@ -10,7 +10,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { TrendingUp, PlusIcon, EditIcon, TrashIcon, Dumbbell } from "lucide-react";
-import { supabaseStorageService } from "@/services/supabaseStorageService";
+import { storageService, StrengthData } from "@/services/storageService";
 import { toast } from "@/components/ui/use-toast";
 
 interface Exercise {
@@ -18,16 +18,6 @@ interface Exercise {
   name: string;
   naturalTarget: number;
   enhancedTarget: number;
-}
-
-interface StrengthData {
-  id?: string;
-  date: string;
-  exercise: string;
-  sets: number;
-  reps: number;
-  weight: number;
-  notes?: string;
 }
 
 const StrengthTracking = () => {
@@ -55,31 +45,26 @@ const StrengthTracking = () => {
     loadData();
   }, []);
 
-  const loadData = async () => {
-    try {
-      // Load exercises from localStorage (since they're not in Supabase yet)
-      const defaultExercises: Exercise[] = [
-        { id: "bench", name: "Bankdrücken", naturalTarget: 140, enhancedTarget: 180 },
-        { id: "squat", name: "Kniebeugen", naturalTarget: 180, enhancedTarget: 220 },
-        { id: "deadlift", name: "Kreuzheben", naturalTarget: 200, enhancedTarget: 250 },
-        { id: "pullup", name: "Klimmzüge", naturalTarget: 15, enhancedTarget: 20 },
-        { id: "ohp", name: "Schulterdrücken", naturalTarget: 80, enhancedTarget: 100 }
-      ];
+  const loadData = () => {
+    // Lade default exercises oder aus localStorage
+    const defaultExercises: Exercise[] = [
+      { id: "bench", name: "Bankdrücken", naturalTarget: 140, enhancedTarget: 180 },
+      { id: "squat", name: "Kniebeugen", naturalTarget: 180, enhancedTarget: 220 },
+      { id: "deadlift", name: "Kreuzheben", naturalTarget: 200, enhancedTarget: 250 },
+      { id: "pullup", name: "Klimmzüge", naturalTarget: 15, enhancedTarget: 20 },
+      { id: "ohp", name: "Schulterdrücken", naturalTarget: 80, enhancedTarget: 100 }
+    ];
 
-      const stored = localStorage.getItem('strength_exercises');
-      const loadedExercises = stored ? JSON.parse(stored) : defaultExercises;
-      
-      setExercises(loadedExercises);
-      if (loadedExercises.length > 0 && !selectedExercise) {
-        setSelectedExercise(loadedExercises[0].id);
-      }
-
-      // Load strength records from Supabase
-      const strengthRecords = await supabaseStorageService.getStrengthRecords();
-      setStrengthData(strengthRecords);
-    } catch (error) {
-      console.error('Error loading strength data:', error);
+    const stored = localStorage.getItem('strength_exercises');
+    const loadedExercises = stored ? JSON.parse(stored) : defaultExercises;
+    
+    setExercises(loadedExercises);
+    if (loadedExercises.length > 0 && !selectedExercise) {
+      setSelectedExercise(loadedExercises[0].id);
     }
+
+    const strengthEntries = storageService.getStrengthData();
+    setStrengthData(strengthEntries);
   };
 
   const saveExercises = (exerciseList: Exercise[]) => {
@@ -87,7 +72,7 @@ const StrengthTracking = () => {
     setExercises(exerciseList);
   };
 
-  const addStrengthEntry = async () => {
+  const addStrengthEntry = () => {
     if (!selectedExercise || !newEntry.weight || !newEntry.sets || !newEntry.reps) {
       toast({
         title: "Fehler",
@@ -100,7 +85,8 @@ const StrengthTracking = () => {
     const exercise = exercises.find(e => e.id === selectedExercise);
     if (!exercise) return;
 
-    const entry = {
+    const entry: StrengthData = {
+      id: `strength_${Date.now()}`,
       date: format(new Date(), "yyyy-MM-dd"),
       exercise: exercise.name,
       sets: parseInt(newEntry.sets),
@@ -109,25 +95,16 @@ const StrengthTracking = () => {
       notes: newEntry.notes || undefined
     };
 
-    try {
-      await supabaseStorageService.saveStrengthRecords([entry]);
-      await loadData();
+    storageService.saveStrengthEntry(entry);
+    loadData();
 
-      setNewEntry({ sets: "", reps: "", weight: "", notes: "" });
-      setIsEntryDialogOpen(false);
+    setNewEntry({ sets: "", reps: "", weight: "", notes: "" });
+    setIsEntryDialogOpen(false);
 
-      toast({
-        title: "Krafttraining eingetragen",
-        description: `${exercise.name}: ${entry.sets}x${entry.reps} @ ${entry.weight}kg`,
-      });
-    } catch (error) {
-      console.error('Error saving strength entry:', error);
-      toast({
-        title: "Fehler",
-        description: "Krafteintrag konnte nicht gespeichert werden.",
-        variant: "destructive"
-      });
-    }
+    toast({
+      title: "Krafttraining eingetragen",
+      description: `${exercise.name}: ${entry.sets}x${entry.reps} @ ${entry.weight}kg`,
+    });
   };
 
   const addOrUpdateExercise = () => {
@@ -196,13 +173,11 @@ const StrengthTracking = () => {
     selectedExerciseData && entry.exercise === selectedExerciseData.name
   );
 
-  const chartData = exerciseEntries
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .map(entry => ({
-      date: format(new Date(entry.date), "dd.MM"),
-      weight: entry.weight,
-      volume: entry.sets * entry.reps * entry.weight
-    }));
+  const chartData = exerciseEntries.map(entry => ({
+    date: format(new Date(entry.date), "dd.MM"),
+    weight: entry.weight,
+    volume: entry.sets * entry.reps * entry.weight
+  }));
 
   return (
     <div className="flex h-screen">
@@ -498,25 +473,22 @@ const StrengthTracking = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
-                    {exerciseEntries
-                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                      .slice(0, 5)
-                      .map((entry) => (
-                        <div key={entry.id || `${entry.date}-${entry.weight}`} className="flex items-center justify-between p-3 border rounded-lg">
-                          <div className="flex-1">
-                            <div className="font-medium">
-                              {format(new Date(entry.date), "dd.MM.yyyy", { locale: de })}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              {entry.sets}x{entry.reps} @ {entry.weight}kg
-                              {entry.notes && ` • ${entry.notes}`}
-                            </div>
+                    {exerciseEntries.slice(-5).reverse().map((entry) => (
+                      <div key={entry.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex-1">
+                          <div className="font-medium">
+                            {format(new Date(entry.date), "dd.MM.yyyy", { locale: de })}
                           </div>
-                          <div className="text-sm font-medium">
-                            Vol: {(entry.sets * entry.reps * entry.weight).toFixed(0)}kg
+                          <div className="text-sm text-muted-foreground">
+                            {entry.sets}x{entry.reps} @ {entry.weight}kg
+                            {entry.notes && ` • ${entry.notes}`}
                           </div>
                         </div>
-                      ))}
+                        <div className="text-sm font-medium">
+                          Vol: {(entry.sets * entry.reps * entry.weight).toFixed(0)}kg
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
