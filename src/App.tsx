@@ -5,10 +5,10 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { SupabaseAuthProvider, useSupabaseAuth } from "./contexts/SupabaseAuthContext";
 import { DataProvider } from "./contexts/DataContext";
 import Loader from "./components/Loader";
-import Login from "./pages/Login";
+import Auth from "./pages/Auth";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import BodyTracking from "./pages/BodyTracking";
@@ -26,17 +26,18 @@ const queryClient = new QueryClient();
 // App content with loader
 const AppContent = () => {
   const [isLoading, setIsLoading] = useState(true);
+  const { isLoading: authLoading } = useSupabaseAuth();
 
   useEffect(() => {
     // Simulate app initialization
     const timer = setTimeout(() => {
       setIsLoading(false);
-    }, 4000); // 4 second loader
+    }, 2000); // Reduced loader time since we have auth loading
 
     return () => clearTimeout(timer);
   }, []);
 
-  if (isLoading) {
+  if (isLoading || authLoading) {
     return <Loader />;
   }
 
@@ -45,10 +46,10 @@ const AppContent = () => {
 
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated } = useSupabaseAuth();
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/auth" replace />;
   }
 
   return (
@@ -58,11 +59,33 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
+// Public route component (redirect to dashboard if authenticated)
+const PublicRoute = ({ children }: { children: React.ReactNode }) => {
+  const { isAuthenticated } = useSupabaseAuth();
+
+  if (isAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+};
+
 // Routes component
 const AppRoutes = () => (
   <BrowserRouter>
     <Routes>
-      <Route path="/login" element={<Login />} />
+      <Route 
+        path="/auth" 
+        element={
+          <PublicRoute>
+            <Auth />
+          </PublicRoute>
+        } 
+      />
+      <Route 
+        path="/login" 
+        element={<Navigate to="/auth" replace />}
+      />
       <Route 
         path="/" 
         element={
@@ -143,13 +166,13 @@ const AppRoutes = () => (
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <AuthProvider>
+      <SupabaseAuthProvider>
         <DataProvider>
           <Toaster />
           <Sonner />
           <AppContent />
         </DataProvider>
-      </AuthProvider>
+      </SupabaseAuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
