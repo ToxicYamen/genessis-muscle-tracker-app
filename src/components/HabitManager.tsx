@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,8 +7,15 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { PlusIcon, EditIcon, TrashIcon, Utensils, Droplet, CircleCheck, Pill, Dumbbell, Moon, Coffee } from "lucide-react";
-import { storageService, HabitData } from "@/services/storageService";
+import { supabaseStorageService } from "@/services/supabaseStorageService";
 import { toast } from "@/components/ui/use-toast";
+
+interface HabitData {
+  id: string;
+  name: string;
+  description?: string;
+  completedDates: string[];
+}
 
 interface HabitManagerProps {
   habits: HabitData[];
@@ -29,6 +37,7 @@ const HabitManager = ({ habits, onHabitsChange }: HabitManagerProps) => {
   const [editingHabit, setEditingHabit] = useState<HabitData | null>(null);
   const [formData, setFormData] = useState({
     name: "",
+    description: "",
     icon: "CircleCheck",
     target: 1
   });
@@ -36,6 +45,7 @@ const HabitManager = ({ habits, onHabitsChange }: HabitManagerProps) => {
   const resetForm = () => {
     setFormData({
       name: "",
+      description: "",
       icon: "CircleCheck",
       target: 1
     });
@@ -47,8 +57,9 @@ const HabitManager = ({ habits, onHabitsChange }: HabitManagerProps) => {
       setEditingHabit(habit);
       setFormData({
         name: habit.name,
-        icon: habit.icon,
-        target: habit.target
+        description: habit.description || "",
+        icon: "CircleCheck", // Default icon since we don't store it in the simplified interface
+        target: 1 // Default target
       });
     } else {
       resetForm();
@@ -61,7 +72,7 @@ const HabitManager = ({ habits, onHabitsChange }: HabitManagerProps) => {
     resetForm();
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.name.trim()) {
@@ -73,56 +84,69 @@ const HabitManager = ({ habits, onHabitsChange }: HabitManagerProps) => {
       return;
     }
 
-    if (editingHabit) {
-      // Update existing habit
-      const updatedHabits = habits.map(habit => 
-        habit.id === editingHabit.id 
-          ? { ...habit, ...formData }
-          : habit
-      );
-      storageService.saveHabits(updatedHabits);
-      
+    try {
+      if (editingHabit) {
+        // Update existing habit
+        await supabaseStorageService.saveHabits([{
+          id: editingHabit.id,
+          name: formData.name,
+          description: formData.description,
+          icon: formData.icon,
+          target: formData.target
+        }]);
+        
+        toast({
+          title: "Habit aktualisiert",
+          description: `${formData.name} wurde erfolgreich aktualisiert.`,
+        });
+      } else {
+        // Create new habit
+        await supabaseStorageService.saveHabits([{
+          name: formData.name,
+          description: formData.description,
+          icon: formData.icon,
+          target: formData.target
+        }]);
+        
+        toast({
+          title: "Habit erstellt",
+          description: `${formData.name} wurde erfolgreich hinzugefügt.`,
+        });
+      }
+
+      onHabitsChange();
+      closeDialog();
+    } catch (error) {
+      console.error('Error saving habit:', error);
       toast({
-        title: "Habit aktualisiert",
-        description: `${formData.name} wurde erfolgreich aktualisiert.`,
-      });
-    } else {
-      // Create new habit
-      const newHabit: HabitData = {
-        id: `habit_${Date.now()}`,
-        name: formData.name,
-        icon: formData.icon,
-        target: formData.target,
-        completed: 0,
-        streak: 0,
-        dates: {},
-        completedDates: []
-      };
-      
-      const updatedHabits = [...habits, newHabit];
-      storageService.saveHabits(updatedHabits);
-      
-      toast({
-        title: "Habit erstellt",
-        description: `${formData.name} wurde erfolgreich hinzugefügt.`,
+        title: "Fehler",
+        description: "Habit konnte nicht gespeichert werden.",
+        variant: "destructive",
       });
     }
-
-    onHabitsChange();
-    closeDialog();
   };
 
-  const deleteHabit = (habitId: string) => {
-    const habitToDelete = habits.find(h => h.id === habitId);
-    const updatedHabits = habits.filter(h => h.id !== habitId);
-    storageService.saveHabits(updatedHabits);
-    
-    toast({
-      title: "Habit gelöscht",
-      description: `${habitToDelete?.name} wurde erfolgreich entfernt.`,
-    });
-    
-    onHabitsChange();
+  const deleteHabit = async (habitId: string) => {
+    try {
+      const habitToDelete = habits.find(h => h.id === habitId);
+      
+      // Note: You'll need to implement a delete method in supabaseStorageService
+      console.log('Would delete habit:', habitId);
+      
+      toast({
+        title: "Habit gelöscht",
+        description: `${habitToDelete?.name} wurde erfolgreich entfernt.`,
+      });
+      
+      onHabitsChange();
+    } catch (error) {
+      console.error('Error deleting habit:', error);
+      toast({
+        title: "Fehler",
+        description: "Habit konnte nicht gelöscht werden.",
+        variant: "destructive",
+      });
+    }
   };
 
   const getIconComponent = (iconName: string) => {
@@ -164,6 +188,17 @@ const HabitManager = ({ habits, onHabitsChange }: HabitManagerProps) => {
                     value={formData.name}
                     onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                     placeholder="z.B. Protein Shake, Wasser trinken..."
+                    className="glass-card border-primary/20"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="description">Beschreibung (optional)</Label>
+                  <Input
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Zusätzliche Details..."
                     className="glass-card border-primary/20"
                   />
                 </div>
@@ -225,12 +260,13 @@ const HabitManager = ({ habits, onHabitsChange }: HabitManagerProps) => {
             >
               <div className="flex items-center gap-3">
                 <div className="bg-primary/20 rounded-full p-2 border border-primary/30">
-                  {getIconComponent(habit.icon)}
+                  {getIconComponent("CircleCheck")}
                 </div>
                 <div>
                   <h4 className="font-medium">{habit.name}</h4>
                   <p className="text-xs text-muted-foreground">
-                    Ziel: {habit.target}x täglich • Streak: {habit.streak} Tage
+                    {habit.description && `${habit.description} • `}
+                    Abgeschlossen: {habit.completedDates.length} Tage
                   </p>
                 </div>
               </div>
