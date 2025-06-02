@@ -51,7 +51,18 @@ const BodyTracking = () => {
     try {
       setLoading(true);
       const data = await supabaseStorageService.getBodyMeasurements();
-      setMeasurements(data);
+      
+      // Convert from database format (snake_case) to local format (camelCase)
+      const convertedData = data.map(item => ({
+        id: item.id,
+        date: item.date,
+        weight: item.weight || 0,
+        height: item.height || 186,
+        bodyFat: item.body_fat || 0,
+        muscleMass: item.muscle_mass || 0
+      }));
+      
+      setMeasurements(convertedData);
     } catch (error) {
       console.error('Error loading measurements:', error);
       toast({
@@ -154,8 +165,8 @@ const BodyTracking = () => {
   const chartData = measurements.map(m => ({
     date: format(new Date(m.date), "dd.MM", { locale: de }),
     Gewicht: m.weight,
-    Körperfett: m.body_fat,
-    Muskelmasse: m.muscle_mass || 0
+    Körperfett: m.bodyFat,
+    Muskelmasse: m.muscleMass || 0
   }));
 
   const latestMeasurement = measurements[measurements.length - 1];
@@ -314,13 +325,13 @@ const BodyTracking = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-400">
-              {latestMeasurement?.body_fat || "?"}%
+              {latestMeasurement?.bodyFat || "?"}%
             </div>
             <p className="text-xs text-muted-foreground">
               {measurements.length > 1 && (
                 <>
-                  {(latestMeasurement.body_fat - measurements[measurements.length - 2].body_fat) > 0 ? '↗' : '↘'} 
-                  {Math.abs(latestMeasurement.body_fat - measurements[measurements.length - 2].body_fat).toFixed(1)}%
+                  {(latestMeasurement.bodyFat - measurements[measurements.length - 2].bodyFat) > 0 ? '↗' : '↘'} 
+                  {Math.abs(latestMeasurement.bodyFat - measurements[measurements.length - 2].bodyFat).toFixed(1)}%
                 </>
               )}
             </p>
@@ -336,7 +347,7 @@ const BodyTracking = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-400">
-              {latestMeasurement?.muscle_mass || "?"} kg
+              {latestMeasurement?.muscleMass || "?"} kg
             </div>
             <p className="text-xs text-muted-foreground">
               Geschätzt
@@ -387,7 +398,7 @@ const BodyTracking = () => {
                     strokeWidth={3}
                     dot={{ fill: "#f97316", strokeWidth: 2, r: 4 }}
                   />
-                  {measurements.some(m => m.muscle_mass > 0) && (
+                  {measurements.some(m => m.muscleMass > 0) && (
                     <Line 
                       type="monotone" 
                       dataKey="Muskelmasse" 
@@ -426,8 +437,8 @@ const BodyTracking = () => {
                       {format(new Date(measurement.date), "dd.MM.yyyy", { locale: de })}
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      {measurement.weight}kg • {measurement.body_fat}% KF • {measurement.height}cm
-                      {measurement.muscle_mass > 0 && ` • ${measurement.muscle_mass}kg MM`}
+                      {measurement.weight}kg • {measurement.bodyFat}% KF • {measurement.height}cm
+                      {measurement.muscleMass > 0 && ` • ${measurement.muscleMass}kg MM`}
                     </div>
                   </div>
                   <Button

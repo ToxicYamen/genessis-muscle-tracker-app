@@ -43,7 +43,9 @@ const Habits = () => {
       
       // Combine habits with their completions
       const habitsWithCompletions = habitsData.map(habit => ({
-        ...habit,
+        id: habit.id!,
+        name: habit.name,
+        description: habit.description,
         completedDates: habitCompletions
           .filter(completion => completion.habit_id === habit.id)
           .map(completion => completion.date)
