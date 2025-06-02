@@ -1,305 +1,387 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
-import { CheckCircle, Circle, Pill, Zap, Sun, Droplets, Shield, Activity, Dumbbell, Circle as CircleIcon, Settings } from "lucide-react";
-import { storageService, SupplementData, AdvancedSupplementsSettings } from "@/services/storageService";
+import { Pill, Clock, CheckCircle, Circle, PlusIcon, EditIcon, TrashIcon } from "lucide-react";
+import { supabaseStorageService } from "@/services/supabaseStorageService";
 import { toast } from "@/components/ui/use-toast";
+import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
+
+interface Supplement {
+  id: string;
+  name: string;
+  dosage: string;
+  timing: string;
+  category: string;
+  icon: string;
+  color: string;
+}
+
+interface SupplementCompletion {
+  id?: string;
+  supplement_id: string;
+  date: string;
+  taken: boolean;
+}
 
 const Supplements = () => {
-  const [supplements, setSupplements] = useState<SupplementData[]>([]);
-  const [advancedSettings, setAdvancedSettings] = useState<AdvancedSupplementsSettings>({ enabled: false });
-  const [currentDate] = useState(new Date());
+  const [supplements, setSupplements] = useState<Supplement[]>([]);
+  const [completions, setCompletions] = useState<SupplementCompletion[]>([]);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingSupplement, setEditingSupplement] = useState<Supplement | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { user } = useSupabaseAuth();
+
+  const [formData, setFormData] = useState({
+    name: "",
+    dosage: "",
+    timing: "morning",
+    category: "vitamin",
+    icon: "Pill",
+    color: "blue"
+  });
 
   useEffect(() => {
-    loadSupplements();
-    loadAdvancedSettings();
-  }, []);
+    if (user) {
+      loadSupplements();
+      loadCompletions();
+    }
+  }, [user]);
 
-  const loadSupplements = () => {
-    const data = storageService.getSupplements();
-    setSupplements(data);
-  };
-
-  const loadAdvancedSettings = () => {
-    const settings = storageService.getAdvancedSupplementsSettings();
-    setAdvancedSettings(settings);
-  };
-
-  const toggleSupplement = (supplementId: string) => {
-    const today = format(new Date(), 'yyyy-MM-dd');
-    storageService.toggleSupplementTaken(supplementId, today);
-    loadSupplements();
-
-    const supplement = supplements.find(s => s.id === supplementId);
-    const wasTaken = supplement?.taken[today];
-    
-    toast({
-      title: wasTaken ? "Supplement eingenommen" : "Einnahme rückgängig",
-      description: `${supplement?.name} für heute ${wasTaken ? 'als eingenommen markiert' : 'zurückgesetzt'}.`,
-    });
-  };
-
-  const toggleAdvancedSupplements = (enabled: boolean) => {
-    const newSettings = { enabled };
-    setAdvancedSettings(newSettings);
-    storageService.saveAdvancedSupplementsSettings(newSettings);
-    
-    toast({
-      title: enabled ? "Ergänzungsmittel aktiviert" : "Ergänzungsmittel deaktiviert",
-      description: enabled ? "Erweiterte Ergänzungsmittel sind jetzt sichtbar." : "Erweiterte Ergänzungsmittel wurden ausgeblendet.",
-    });
-  };
-
-  const isSupplementTaken = (supplementId: string) => {
-    const today = format(new Date(), 'yyyy-MM-dd');
-    const supplement = supplements.find(s => s.id === supplementId);
-    return supplement?.taken[today] || false;
-  };
-
-  const getSupplementIcon = (iconName: string) => {
-    switch (iconName) {
-      case 'Zap': return <Zap className="h-4 w-4" />;
-      case 'Sun': return <Sun className="h-4 w-4" />;
-      case 'Droplet': return <Droplets className="h-4 w-4" />;
-      case 'Shield': return <Shield className="h-4 w-4" />;
-      case 'Activity': return <Activity className="h-4 w-4" />;
-      case 'Dumbbell': return <Dumbbell className="h-4 w-4" />;
-      case 'Citrus': return <CircleIcon className="h-4 w-4" />;
-      default: return <Pill className="h-4 w-4" />;
+  const loadSupplements = async () => {
+    try {
+      setLoading(true);
+      const supplementsData = await supabaseStorageService.getSupplements();
+      setSupplements(supplementsData);
+    } catch (error) {
+      console.error('Error loading supplements:', error);
+      toast({
+        title: "Fehler",
+        description: "Supplements konnten nicht geladen werden.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const categorizedSupplements = {
-    basic: supplements.filter(s => s.category === 'basic'),
-    performance: supplements.filter(s => s.category === 'performance'),
-    health: supplements.filter(s => s.category === 'health'),
-    recovery: supplements.filter(s => s.category === 'recovery'),
-    advanced: supplements.filter(s => s.category === 'advanced')
+  const loadCompletions = async () => {
+    try {
+      const completionsData = await supabaseStorageService.getSupplementCompletions();
+      setCompletions(completionsData);
+    } catch (error) {
+      console.error('Error loading completions:', error);
+    }
   };
 
-  const categoryLabels = {
-    basic: 'Grundlagen',
-    performance: 'Performance',
-    health: 'Gesundheit',
-    recovery: 'Regeneration',
-    advanced: 'Ergänzungsmittel'
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.name.trim()) {
+      toast({
+        title: "Fehler",
+        description: "Bitte gib einen Namen für das Supplement ein.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const supplementData = {
+        id: editingSupplement?.id,
+        name: formData.name,
+        dosage: formData.dosage,
+        timing: formData.timing,
+        category: formData.category,
+        icon: formData.icon,
+        color: formData.color
+      };
+
+      await supabaseStorageService.saveSupplements([supplementData]);
+      
+      toast({
+        title: editingSupplement ? "Supplement aktualisiert" : "Supplement erstellt",
+        description: `${formData.name} wurde erfolgreich ${editingSupplement ? 'aktualisiert' : 'hinzugefügt'}.`,
+      });
+
+      resetForm();
+      setIsDialogOpen(false);
+      await loadSupplements();
+    } catch (error) {
+      console.error('Error saving supplement:', error);
+      toast({
+        title: "Fehler",
+        description: "Supplement konnte nicht gespeichert werden.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const regularSupplements = supplements.filter(s => s.category !== 'advanced');
-  const todayTaken = regularSupplements.filter(s => isSupplementTaken(s.id)).length;
-  const totalSupplements = regularSupplements.length;
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      dosage: "",
+      timing: "morning",
+      category: "vitamin",
+      icon: "Pill",
+      color: "blue"
+    });
+    setEditingSupplement(null);
+  };
 
-  const advancedTodayTaken = categorizedSupplements.advanced.filter(s => isSupplementTaken(s.id)).length;
-  const totalAdvanced = categorizedSupplements.advanced.length;
+  const startEdit = (supplement: Supplement) => {
+    setEditingSupplement(supplement);
+    setFormData({
+      name: supplement.name,
+      dosage: supplement.dosage,
+      timing: supplement.timing,
+      category: supplement.category,
+      icon: supplement.icon,
+      color: supplement.color
+    });
+    setIsDialogOpen(true);
+  };
+
+  const toggleCompletion = async (supplementId: string) => {
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const existingCompletion = completions.find(
+        c => c.supplement_id === supplementId && c.date === today
+      );
+
+      if (existingCompletion) {
+        // Update existing completion
+        const updatedCompletion = {
+          ...existingCompletion,
+          taken: !existingCompletion.taken
+        };
+        await supabaseStorageService.saveSupplementCompletions([updatedCompletion]);
+      } else {
+        // Create new completion
+        const newCompletion = {
+          supplement_id: supplementId,
+          date: today,
+          taken: true
+        };
+        await supabaseStorageService.saveSupplementCompletions([newCompletion]);
+      }
+
+      await loadCompletions();
+      
+      const supplement = supplements.find(s => s.id === supplementId);
+      toast({
+        title: existingCompletion?.taken ? "Zurückgesetzt" : "Eingenommen",
+        description: `${supplement?.name} für heute ${existingCompletion?.taken ? 'zurückgesetzt' : 'als eingenommen markiert'}.`,
+      });
+    } catch (error) {
+      console.error('Error toggling completion:', error);
+      toast({
+        title: "Fehler",
+        description: "Status konnte nicht geändert werden.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const isCompletedToday = (supplementId: string) => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const completion = completions.find(
+      c => c.supplement_id === supplementId && c.date === today
+    );
+    return completion?.taken || false;
+  };
+
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Bitte melde dich an, um deine Supplements zu verwalten.</p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Lade Supplements...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-4 sm:space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">
+          <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">
             Supplements
           </h2>
-          <p className="text-sm sm:text-base text-muted-foreground">
-            Verfolge deine tägliche Supplementeinnahme
-          </p>
+          <p className="text-muted-foreground">Verwalte deine täglichen Supplements</p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-sm">
-            {todayTaken}/{totalSupplements} heute eingenommen
-          </Badge>
-        </div>
-      </div>
-
-      {/* Advanced Supplements Toggle */}
-      <Card className="glass-card">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2">
-            <Settings className="h-5 w-5 text-primary" />
-            Erweiterte Ergänzungsmittel
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Ergänzungsmittel aktivieren</p>
-              <p className="text-xs text-muted-foreground">
-                Zeige erweiterte Ergänzungsmittel (MK-677, Epicatechin, etc.)
-              </p>
-            </div>
-            <Switch
-              checked={advancedSettings.enabled}
-              onCheckedChange={toggleAdvancedSupplements}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Today's Overview */}
-      <Card className="glass-card">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2">
-            <CheckCircle className="h-5 w-5 text-primary" />
-            Heute - {format(new Date(), "dd.MM.yyyy", { locale: de })}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {regularSupplements.map((supplement) => (
-              <div
-                key={supplement.id}
-                className={`
-                  glass-card rounded-xl p-3 border transition-all cursor-pointer hover:scale-105
-                  ${isSupplementTaken(supplement.id) 
-                    ? 'border-green-500/50 bg-green-500/10' 
-                    : 'border-primary/20'
-                  }
-                `}
-                onClick={() => toggleSupplement(supplement.id)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div 
-                      className="p-2 rounded-full border"
-                      style={{ 
-                        backgroundColor: `${supplement.color}20`,
-                        borderColor: `${supplement.color}50`
-                      }}
-                    >
-                      {getSupplementIcon(supplement.icon)}
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-sm">{supplement.name}</h4>
-                      <p className="text-xs text-muted-foreground">{supplement.dosage}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center">
-                    {isSupplementTaken(supplement.id) ? (
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                    ) : (
-                      <Circle className="h-5 w-5 text-muted-foreground" />
-                    )}
-                  </div>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) resetForm();
+        }}>
+          <DialogTrigger asChild>
+            <Button>
+              <PlusIcon className="mr-2 h-4 w-4" />
+              Neues Supplement
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {editingSupplement ? "Supplement bearbeiten" : "Neues Supplement"}
+              </DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="z.B. Vitamin D3"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="dosage">Dosierung</Label>
+                <Input
+                  id="dosage"
+                  value={formData.dosage}
+                  onChange={(e) => setFormData(prev => ({ ...prev, dosage: e.target.value }))}
+                  placeholder="z.B. 1000 IU"
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="timing">Einnahmezeit</Label>
+                  <Select value={formData.timing} onValueChange={(value) => setFormData(prev => ({ ...prev, timing: value }))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="morning">Morgens</SelectItem>
+                      <SelectItem value="noon">Mittags</SelectItem>
+                      <SelectItem value="evening">Abends</SelectItem>
+                      <SelectItem value="night">Nachts</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 
-                <div className="mt-2 text-xs text-muted-foreground">
-                  {supplement.timing}
+                <div className="space-y-2">
+                  <Label htmlFor="category">Kategorie</Label>
+                  <Select value={formData.category} onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="vitamin">Vitamin</SelectItem>
+                      <SelectItem value="mineral">Mineral</SelectItem>
+                      <SelectItem value="protein">Protein</SelectItem>
+                      <SelectItem value="pre-workout">Pre-Workout</SelectItem>
+                      <SelectItem value="post-workout">Post-Workout</SelectItem>
+                      <SelectItem value="other">Sonstiges</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              
+              <Button type="submit" className="w-full">
+                {editingSupplement ? "Aktualisieren" : "Hinzufügen"}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
 
-      {/* Advanced Supplements Section */}
-      {advancedSettings.enabled && totalAdvanced > 0 && (
-        <Card className="glass-card border-purple-500/30">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg text-purple-400">
-                {categoryLabels.advanced}
-              </CardTitle>
-              <Badge variant="outline" className="text-sm border-purple-500/30">
-                {advancedTodayTaken}/{totalAdvanced} heute eingenommen
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {categorizedSupplements.advanced.map((supplement) => (
-                <div
-                  key={supplement.id}
-                  className={`
-                    glass-card rounded-xl p-3 border transition-all cursor-pointer hover:scale-105
-                    ${isSupplementTaken(supplement.id) 
-                      ? 'border-purple-500/50 bg-purple-500/10' 
-                      : 'border-purple-500/20'
-                    }
-                  `}
-                  onClick={() => toggleSupplement(supplement.id)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div 
-                        className="p-2 rounded-full border"
-                        style={{ 
-                          backgroundColor: `${supplement.color}20`,
-                          borderColor: `${supplement.color}50`
-                        }}
-                      >
-                        {getSupplementIcon(supplement.icon)}
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-sm">{supplement.name}</h4>
-                        <p className="text-xs text-muted-foreground">{supplement.dosage}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center">
-                      {isSupplementTaken(supplement.id) ? (
-                        <CheckCircle className="h-5 w-5 text-purple-500" />
-                      ) : (
-                        <Circle className="h-5 w-5 text-muted-foreground" />
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    {supplement.timing}
-                  </div>
-                </div>
-              ))}
+      {supplements.length === 0 ? (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <Pill className="mx-auto h-12 w-12 text-muted-foreground" />
+              <h3 className="mt-2 text-sm font-semibold">Keine Supplements</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Füge dein erstes Supplement hinzu.
+              </p>
             </div>
           </CardContent>
         </Card>
-      )}
-
-      {/* Categories */}
-      {Object.entries(categorizedSupplements).map(([category, sups]) => {
-        if (sups.length === 0 || category === 'advanced') return null;
-        
-        return (
-          <Card key={category} className="glass-card">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">
-                {categoryLabels[category as keyof typeof categoryLabels]}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {sups.map((supplement) => (
-                  <div
-                    key={supplement.id}
-                    className="glass-card rounded-xl p-3 border border-primary/20"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div 
-                        className="p-2 rounded-full border"
-                        style={{ 
-                          backgroundColor: `${supplement.color}20`,
-                          borderColor: `${supplement.color}50`
-                        }}
-                      >
-                        {getSupplementIcon(supplement.icon)}
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-medium">{supplement.name}</h4>
-                        <p className="text-sm text-muted-foreground">{supplement.dosage}</p>
-                        <p className="text-xs text-muted-foreground">{supplement.timing}</p>
-                      </div>
-                    </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {supplements.map((supplement) => (
+            <Card key={supplement.id} className="glass-card">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">{supplement.name}</CardTitle>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => startEdit(supplement)}
+                    >
+                      <EditIcon className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 hover:bg-destructive/10 text-destructive"
+                    >
+                      <TrashIcon className="h-3 w-3" />
+                    </Button>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Dosierung:</span>
+                  <span className="text-sm font-medium">{supplement.dosage}</span>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      {supplement.timing === 'morning' && 'Morgens'}
+                      {supplement.timing === 'noon' && 'Mittags'}
+                      {supplement.timing === 'evening' && 'Abends'}
+                      {supplement.timing === 'night' && 'Nachts'}
+                    </span>
+                  </div>
+                  <Badge variant="outline">{supplement.category}</Badge>
+                </div>
+                
+                <Button
+                  onClick={() => toggleCompletion(supplement.id)}
+                  variant={isCompletedToday(supplement.id) ? "default" : "outline"}
+                  className="w-full"
+                >
+                  {isCompletedToday(supplement.id) ? (
+                    <>
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Eingenommen
+                    </>
+                  ) : (
+                    <>
+                      <Circle className="mr-2 h-4 w-4" />
+                      Als eingenommen markieren
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

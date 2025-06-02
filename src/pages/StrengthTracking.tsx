@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,11 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import { TrendingUp, PlusIcon, EditIcon, TrashIcon, Dumbbell } from "lucide-react";
-import { storageService, StrengthData } from "@/services/storageService";
+import { supabaseStorageService } from "@/services/supabaseStorageService";
 import { toast } from "@/components/ui/use-toast";
+import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
 
 interface Exercise {
   id: string;
@@ -20,13 +20,25 @@ interface Exercise {
   enhancedTarget: number;
 }
 
+interface StrengthRecord {
+  id: string;
+  date: string;
+  exercise: string;
+  sets: number;
+  reps: number;
+  weight: number;
+  notes?: string;
+}
+
 const StrengthTracking = () => {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [selectedExercise, setSelectedExercise] = useState<string>("");
-  const [strengthData, setStrengthData] = useState<StrengthData[]>([]);
+  const [strengthData, setStrengthData] = useState<StrengthRecord[]>([]);
   const [isEntryDialogOpen, setIsEntryDialogOpen] = useState(false);
   const [isExerciseDialogOpen, setIsExerciseDialogOpen] = useState(false);
   const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { user } = useSupabaseAuth();
   
   const [newEntry, setNewEntry] = useState({
     sets: "",
@@ -42,29 +54,55 @@ const StrengthTracking = () => {
   });
 
   useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = () => {
-    // Lade default exercises oder aus localStorage
-    const defaultExercises: Exercise[] = [
-      { id: "bench", name: "Bankdrücken", naturalTarget: 140, enhancedTarget: 180 },
-      { id: "squat", name: "Kniebeugen", naturalTarget: 180, enhancedTarget: 220 },
-      { id: "deadlift", name: "Kreuzheben", naturalTarget: 200, enhancedTarget: 250 },
-      { id: "pullup", name: "Klimmzüge", naturalTarget: 15, enhancedTarget: 20 },
-      { id: "ohp", name: "Schulterdrücken", naturalTarget: 80, enhancedTarget: 100 }
-    ];
-
-    const stored = localStorage.getItem('strength_exercises');
-    const loadedExercises = stored ? JSON.parse(stored) : defaultExercises;
-    
-    setExercises(loadedExercises);
-    if (loadedExercises.length > 0 && !selectedExercise) {
-      setSelectedExercise(loadedExercises[0].id);
+    if (user) {
+      loadData();
     }
+  }, [user]);
 
-    const strengthEntries = storageService.getStrengthData();
-    setStrengthData(strengthEntries);
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      
+      // Load default exercises or from localStorage for backwards compatibility
+      const defaultExercises: Exercise[] = [
+        { id: "bench", name: "Bankdrücken", naturalTarget: 140, enhancedTarget: 180 },
+        { id: "squat", name: "Kniebeugen", naturalTarget: 180, enhancedTarget: 220 },
+        { id: "deadlift", name: "Kreuzheben", naturalTarget: 200, enhancedTarget: 250 },
+        { id: "pullup", name: "Klimmzüge", naturalTarget: 15, enhancedTarget: 20 },
+        { id: "ohp", name: "Schulterdrücken", naturalTarget: 80, enhancedTarget: 100 }
+      ];
+
+      const stored = localStorage.getItem('strength_exercises');
+      const loadedExercises = stored ? JSON.parse(stored) : defaultExercises;
+      
+      setExercises(loadedExercises);
+      if (loadedExercises.length > 0 && !selectedExercise) {
+        setSelectedExercise(loadedExercises[0].id);
+      }
+
+      // Load strength records from Supabase
+      const strengthRecords = await supabaseStorageService.getStrengthRecords();
+      const formattedRecords = strengthRecords.map(record => ({
+        id: record.id!,
+        date: record.date,
+        exercise: record.exercise,
+        sets: record.sets,
+        reps: record.reps,
+        weight: record.weight,
+        notes: record.notes
+      }));
+      
+      setStrengthData(formattedRecords);
+    } catch (error) {
+      console.error('Error loading strength data:', error);
+      toast({
+        title: "Fehler",
+        description: "Kraftdaten konnten nicht geladen werden.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const saveExercises = (exerciseList: Exercise[]) => {
@@ -72,7 +110,7 @@ const StrengthTracking = () => {
     setExercises(exerciseList);
   };
 
-  const addStrengthEntry = () => {
+  const addStrengthEntry = async () => {
     if (!selectedExercise || !newEntry.weight || !newEntry.sets || !newEntry.reps) {
       toast({
         title: "Fehler",
@@ -85,26 +123,34 @@ const StrengthTracking = () => {
     const exercise = exercises.find(e => e.id === selectedExercise);
     if (!exercise) return;
 
-    const entry: StrengthData = {
-      id: `strength_${Date.now()}`,
-      date: format(new Date(), "yyyy-MM-dd"),
-      exercise: exercise.name,
-      sets: parseInt(newEntry.sets),
-      reps: parseInt(newEntry.reps),
-      weight: parseFloat(newEntry.weight),
-      notes: newEntry.notes || undefined
-    };
+    try {
+      const entry = {
+        date: format(new Date(), "yyyy-MM-dd"),
+        exercise: exercise.name,
+        sets: parseInt(newEntry.sets),
+        reps: parseInt(newEntry.reps),
+        weight: parseFloat(newEntry.weight),
+        notes: newEntry.notes || undefined
+      };
 
-    storageService.saveStrengthEntry(entry);
-    loadData();
+      await supabaseStorageService.saveStrengthRecords([entry]);
+      await loadData();
 
-    setNewEntry({ sets: "", reps: "", weight: "", notes: "" });
-    setIsEntryDialogOpen(false);
+      setNewEntry({ sets: "", reps: "", weight: "", notes: "" });
+      setIsEntryDialogOpen(false);
 
-    toast({
-      title: "Krafttraining eingetragen",
-      description: `${exercise.name}: ${entry.sets}x${entry.reps} @ ${entry.weight}kg`,
-    });
+      toast({
+        title: "Krafttraining eingetragen",
+        description: `${exercise.name}: ${entry.sets}x${entry.reps} @ ${entry.weight}kg`,
+      });
+    } catch (error) {
+      console.error('Error saving strength entry:', error);
+      toast({
+        title: "Fehler",
+        description: "Krafteintrag konnte nicht gespeichert werden.",
+        variant: "destructive",
+      });
+    }
   };
 
   const addOrUpdateExercise = () => {
@@ -167,6 +213,22 @@ const StrengthTracking = () => {
     setIsExerciseDialogOpen(true);
   };
 
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Bitte melde dich an, um deine Kraftdaten zu sehen.</p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Lade Kraftdaten...</p>
+      </div>
+    );
+  }
+
   // Chart data for selected exercise
   const selectedExerciseData = exercises.find(e => e.id === selectedExercise);
   const exerciseEntries = strengthData.filter(entry => 
@@ -174,7 +236,7 @@ const StrengthTracking = () => {
   );
 
   const chartData = exerciseEntries.map(entry => ({
-    date: format(new Date(entry.date), "dd.MM"),
+    date: format(parseISO(entry.date), "dd.MM"),
     weight: entry.weight,
     volume: entry.sets * entry.reps * entry.weight
   }));

@@ -561,5 +561,49 @@ export const supabaseStorageService = {
       console.error('Migration failed:', error);
       throw error;
     }
+  },
+
+  // Add delete methods that were missing
+  async deleteHabit(habitId: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { error } = await supabase
+      .from('habits')
+      .delete()
+      .eq('id', habitId)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+    return true;
+  },
+
+  async deleteHabitCompletion(habitId: string, date: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { error } = await supabase
+      .from('habit_completions')
+      .delete()
+      .eq('habit_id', habitId)
+      .eq('date', date)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+    return true;
+  },
+
+  async deleteSupplement(supplementId: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { error } = await supabase
+      .from('supplements')
+      .delete()
+      .eq('id', supplementId)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+    return true;
   }
 };
