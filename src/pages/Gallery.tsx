@@ -1,319 +1,538 @@
-
-import { useState, useEffect } from "react";
+import React, { useState, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
-import { ImagePlus, Calendar, Tag, Heart, Trash2 } from "lucide-react";
-import { supabaseStorageService } from "@/services/supabaseStorageService";
+import { 
+  CameraIcon, 
+  PlusIcon, 
+  TrashIcon, 
+  ImageIcon, 
+  HeartIcon, 
+  FilterIcon,
+  GridIcon,
+  CalendarIcon,
+  SearchIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  XIcon
+} from "lucide-react";
+import { storageService, ProgressImage } from "@/services/storageService";
 import { toast } from "@/components/ui/use-toast";
-import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
-
-interface ProgressImage {
-  id: string;
-  date: string;
-  time: string;
-  image_url: string;
-  tags: string[];
-  notes?: string;
-  is_favorite: boolean;
-}
 
 const Gallery = () => {
-  const [images, setImages] = useState<ProgressImage[]>([]);
+  const [images, setImages] = useState<ProgressImage[]>(() => storageService.getProgressImages());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<ProgressImage | null>(null);
-  const [loading, setLoading] = useState(true);
-  const { user } = useSupabaseAuth();
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const [notes, setNotes] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterBy, setFilterBy] = useState<"all" | "favorites" | "recent">("all");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [formData, setFormData] = useState({
-    date: format(new Date(), "yyyy-MM-dd"),
-    time: format(new Date(), "HH:mm"),
-    notes: "",
-    tags: "",
-    imageFile: null as File | null
-  });
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-  useEffect(() => {
-    if (user) {
-      loadImages();
-    }
-  }, [user]);
-
-  const loadImages = async () => {
-    try {
-      setLoading(true);
-      const progressImages = await supabaseStorageService.getProgressImages();
-      
-      const formattedImages = progressImages.map(img => ({
-        id: img.id!,
-        date: img.date,
-        time: img.time,
-        image_url: img.image_url,
-        tags: img.tags || [],
-        notes: img.description,
-        is_favorite: img.is_favorite || false
-      }));
-      
-      setImages(formattedImages.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-    } catch (error) {
-      console.error('Error loading images:', error);
+    if (file.size > 5 * 1024 * 1024) {
       toast({
-        title: "Fehler",
-        description: "Bilder konnten nicht geladen werden.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleImageUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.imageFile) {
-      toast({
-        title: "Fehler",
-        description: "Bitte wähle ein Bild aus.",
+        title: "Datei zu groß",
+        description: "Bitte wähle ein Bild unter 5MB aus.",
         variant: "destructive"
       });
       return;
     }
 
-    try {
-      // For demo purposes, we'll use a placeholder URL
-      // In a real implementation, you would upload to Supabase Storage
-      const imageUrl = URL.createObjectURL(formData.imageFile);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const imageData = e.target?.result as string;
+      const now = new Date();
       
-      const newImage = {
-        date: formData.date,
-        time: formData.time,
-        image_url: imageUrl,
-        description: formData.notes,
-        tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
-        is_favorite: false
+      const newImage: ProgressImage = {
+        id: `img_${Date.now()}`,
+        date: format(now, "yyyy-MM-dd"),
+        time: format(now, "HH:mm:ss"),
+        image: imageData,
+        notes: notes.trim() || undefined,
+        isFavorite: false,
+        tags: []
       };
 
-      await supabaseStorageService.saveProgressImages([newImage]);
-      
-      toast({
-        title: "Bild hochgeladen",
-        description: "Dein Fortschrittsbild wurde erfolgreich gespeichert.",
-      });
-
-      setFormData({
-        date: format(new Date(), "yyyy-MM-dd"),
-        time: format(new Date(), "HH:mm"),
-        notes: "",
-        tags: "",
-        imageFile: null
-      });
-      
+      storageService.saveProgressImage(newImage);
+      setImages(storageService.getProgressImages());
+      setNotes("");
       setIsDialogOpen(false);
-      await loadImages();
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      toast({
-        title: "Fehler",
-        description: "Bild konnte nicht hochgeladen werden.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const toggleFavorite = async (imageId: string) => {
-    try {
-      const image = images.find(img => img.id === imageId);
-      if (!image) return;
-
-      const updatedImage = {
-        id: image.id,
-        date: image.date,
-        time: image.time,
-        image_url: image.image_url,
-        description: image.notes,
-        tags: image.tags,
-        is_favorite: !image.is_favorite
-      };
-
-      await supabaseStorageService.saveProgressImages([updatedImage]);
-      await loadImages();
       
       toast({
-        title: updatedImage.is_favorite ? "Zu Favoriten hinzugefügt" : "Aus Favoriten entfernt",
-        description: "Favorit wurde aktualisiert.",
+        title: "📸 Bild hochgeladen",
+        description: `Progress-Foto vom ${format(now, "dd.MM.yyyy 'um' HH:mm", { locale: de })} gespeichert.`,
       });
-    } catch (error) {
-      console.error('Error toggling favorite:', error);
-      toast({
-        title: "Fehler",
-        description: "Favorit konnte nicht aktualisiert werden.",
-        variant: "destructive",
-      });
+    };
+
+    reader.readAsDataURL(file);
+  };
+
+  const deleteImage = (id: string) => {
+    storageService.deleteProgressImage(id);
+    setImages(storageService.getProgressImages());
+    setSelectedImageIndex(null);
+    
+    toast({
+      title: "🗑️ Bild gelöscht",
+      description: "Das Progress-Foto wurde erfolgreich entfernt.",
+    });
+  };
+
+  const toggleFavorite = (id: string) => {
+    storageService.toggleImageFavorite(id);
+    setImages(storageService.getProgressImages());
+    
+    const image = images.find(img => img.id === id);
+    toast({
+      title: image?.isFavorite ? "💙 Favorit entfernt" : "❤️ Als Favorit markiert",
+      description: image?.isFavorite ? "Foto ist nicht mehr favorisiert" : "Foto zu Favoriten hinzugefügt",
+    });
+  };
+
+  const filteredImages = images.filter(image => {
+    // Search filter
+    if (searchTerm && !image.notes?.toLowerCase().includes(searchTerm.toLowerCase())) {
+      return false;
+    }
+
+    // Category filter
+    switch (filterBy) {
+      case "favorites":
+        return image.isFavorite;
+      case "recent":
+        const weekAgo = new Date();
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        return new Date(image.date) >= weekAgo;
+      default:
+        return true;
+    }
+  });
+
+  const groupedImages = filteredImages.reduce((groups, image) => {
+    const monthKey = format(new Date(image.date), "yyyy-MM");
+    if (!groups[monthKey]) {
+      groups[monthKey] = [];
+    }
+    groups[monthKey].push(image);
+    return groups;
+  }, {} as Record<string, ProgressImage[]>);
+
+  const favoriteImages = images.filter(img => img.isFavorite);
+
+  // Navigation functions for fullscreen view
+  const navigateImage = (direction: 'prev' | 'next') => {
+    if (selectedImageIndex === null) return;
+    
+    const newIndex = direction === 'prev' 
+      ? (selectedImageIndex - 1 + filteredImages.length) % filteredImages.length
+      : (selectedImageIndex + 1) % filteredImages.length;
+    
+    setSelectedImageIndex(newIndex);
+  };
+
+  const openImageFullscreen = (image: ProgressImage) => {
+    const index = filteredImages.findIndex(img => img.id === image.id);
+    setSelectedImageIndex(index);
+  };
+
+  const closeFullscreen = () => {
+    setSelectedImageIndex(null);
+  };
+
+  // Handle keyboard navigation
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (selectedImageIndex === null) return;
+    
+    switch (e.key) {
+      case 'ArrowLeft':
+        navigateImage('prev');
+        break;
+      case 'ArrowRight':
+        navigateImage('next');
+        break;
+      case 'Escape':
+        closeFullscreen();
+        break;
     }
   };
 
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-muted-foreground">Bitte melde dich an, um deine Fortschrittsbilder zu sehen.</p>
-      </div>
-    );
-  }
+  // Add keyboard event listener
+  React.useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedImageIndex]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-muted-foreground">Lade Bilder...</p>
-      </div>
-    );
-  }
+  const selectedImage = selectedImageIndex !== null ? filteredImages[selectedImageIndex] : null;
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
+    <motion.div 
+      className="space-y-6"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.2 }}
+        >
           <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">
-            Fortschrittsgalerie
+            📸 Progress Galerie
           </h2>
-          <p className="text-muted-foreground">Dokumentiere deinen Fortschritt mit Bildern</p>
-        </div>
-
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <ImagePlus className="mr-2 h-4 w-4" />
-              Bild hinzufügen
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Neues Fortschrittsbild</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleImageUpload} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="date">Datum</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="time">Zeit</Label>
-                  <Input
-                    id="time"
-                    type="time"
-                    value={formData.time}
-                    onChange={(e) => setFormData(prev => ({ ...prev, time: e.target.value }))}
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="image">Bild</Label>
-                <Input
-                  id="image"
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setFormData(prev => ({ ...prev, imageFile: e.target.files?.[0] || null }))}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="tags">Tags (kommagetrennt)</Label>
-                <Input
-                  id="tags"
-                  value={formData.tags}
-                  onChange={(e) => setFormData(prev => ({ ...prev, tags: e.target.value }))}
-                  placeholder="z.B. front, morning, workout"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="notes">Notizen (optional)</Label>
-                <Input
-                  id="notes"
-                  value={formData.notes}
-                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  placeholder="Zusätzliche Informationen..."
-                />
-              </div>
-              
-              <Button type="submit" className="w-full">
-                Bild speichern
+          <p className="text-muted-foreground">
+            Dokumentiere deine körperliche Transformation
+          </p>
+        </motion.div>
+        
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="flex items-center gap-2 rounded-full glass-card border border-primary/30 btn-modern">
+                <CameraIcon className="h-4 w-4" />
+                Foto hinzufügen
               </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="glass-enhanced">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <CameraIcon className="h-5 w-5 text-primary" />
+                  Neues Progress-Foto
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="image">Foto auswählen</Label>
+                  <Input
+                    id="image"
+                    type="file"
+                    accept="image/*"
+                    ref={fileInputRef}
+                    onChange={handleImageUpload}
+                    className="glass-card border-primary/20 focus-enhanced"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="notes">Notizen (optional)</Label>
+                  <Textarea
+                    id="notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Wie fühlst du dich? Besondere Erfolge?"
+                    className="glass-card border-primary/20 focus-enhanced"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  📅 Datum und Uhrzeit werden automatisch hinzugefügt
+                </p>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </motion.div>
       </div>
 
-      {images.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <ImagePlus className="mx-auto h-12 w-12 text-muted-foreground" />
-              <h3 className="mt-2 text-sm font-semibold">Keine Bilder</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Füge dein erstes Fortschrittsbild hinzu.
-              </p>
-            </div>
+      {/* Stats */}
+      <motion.div 
+        className="grid grid-cols-2 md:grid-cols-4 gap-4"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+      >
+        <Card className="glass-card card-hover">
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-primary">{images.length}</div>
+            <p className="text-xs text-muted-foreground">Gesamt Fotos</p>
           </CardContent>
         </Card>
+        <Card className="glass-card card-hover">
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-red-400">{favoriteImages.length}</div>
+            <p className="text-xs text-muted-foreground">Favoriten</p>
+          </CardContent>
+        </Card>
+        <Card className="glass-card card-hover">
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-green-400">
+              {images.filter(img => {
+                const weekAgo = new Date();
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                return new Date(img.date) >= weekAgo;
+              }).length}
+            </div>
+            <p className="text-xs text-muted-foreground">Diese Woche</p>
+          </CardContent>
+        </Card>
+        <Card className="glass-card card-hover">
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-blue-400">
+              {Object.keys(groupedImages).length}
+            </div>
+            <p className="text-xs text-muted-foreground">Monate</p>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Controls */}
+      <motion.div 
+        className="flex flex-col sm:flex-row gap-4 items-start sm:items-center"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5 }}
+      >
+        <div className="flex items-center gap-2 flex-1">
+          <SearchIcon className="h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Notizen durchsuchen..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="glass-card border-primary/20 focus-enhanced"
+          />
+        </div>
+        
+        <Tabs value={filterBy} onValueChange={(value) => setFilterBy(value as any)} className="w-auto">
+          <TabsList className="glass-card">
+            <TabsTrigger value="all">Alle</TabsTrigger>
+            <TabsTrigger value="favorites">❤️ Favoriten</TabsTrigger>
+            <TabsTrigger value="recent">🕒 Aktuell</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </motion.div>
+
+      {/* Gallery Content */}
+      {filteredImages.length === 0 ? (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.6 }}
+        >
+          <Card className="glass-card card-hover">
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <ImageIcon className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium mb-2">
+                {searchTerm || filterBy !== "all" ? "Keine Fotos gefunden" : "Noch keine Fotos"}
+              </h3>
+              <p className="text-muted-foreground text-center mb-4">
+                {searchTerm || filterBy !== "all" 
+                  ? "Versuche einen anderen Filter oder Suchbegriff" 
+                  : "Beginne deine Transformation zu dokumentieren"
+                }
+              </p>
+              {!searchTerm && filterBy === "all" && (
+                <Button 
+                  onClick={() => setIsDialogOpen(true)}
+                  className="rounded-full border border-primary/30 btn-modern"
+                >
+                  <PlusIcon className="h-4 w-4 mr-2" />
+                  Erstes Foto hinzufügen
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {images.map((image) => (
-            <Card key={image.id} className="group cursor-pointer hover:shadow-lg transition-shadow">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
+        <div className="space-y-8">
+          <AnimatePresence>
+            {Object.entries(groupedImages)
+              .sort(([a], [b]) => b.localeCompare(a))
+              .map(([monthKey, monthImages], groupIndex) => (
+                <motion.div 
+                  key={monthKey}
+                  initial={{ opacity: 0, y: 50 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -50 }}
+                  transition={{ delay: groupIndex * 0.1 }}
+                >
+                  <div className="flex items-center gap-3 mb-4">
+                    <CalendarIcon className="h-5 w-5 text-primary" />
+                    <h3 className="text-xl font-semibold text-primary">
+                      {format(new Date(monthKey + "-01"), "MMMM yyyy", { locale: de })}
+                    </h3>
+                    <div className="flex-1 h-px bg-gradient-to-r from-primary/20 to-transparent"></div>
                     <span className="text-sm text-muted-foreground">
-                      {format(new Date(image.date), "dd.MM.yyyy", { locale: de })} um {image.time}
+                      {monthImages.length} Foto{monthImages.length !== 1 ? 's' : ''}
                     </span>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toggleFavorite(image.id)}
-                    className={image.is_favorite ? "text-red-500" : "text-muted-foreground"}
-                  >
-                    <Heart className={`h-4 w-4 ${image.is_favorite ? "fill-current" : ""}`} />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div 
-                  className="aspect-square rounded-lg bg-cover bg-center"
-                  style={{ backgroundImage: `url(${image.image_url})` }}
-                />
-                
-                {image.tags && image.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {image.tags.map((tag, index) => (
-                      <Badge key={index} variant="secondary" className="text-xs">
-                        <Tag className="h-3 w-3 mr-1" />
-                        {tag}
-                      </Badge>
-                    ))}
+                  
+                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    <AnimatePresence>
+                      {monthImages
+                        .sort((a, b) => new Date(`${b.date} ${b.time}`).getTime() - new Date(`${a.date} ${a.time}`).getTime())
+                        .map((image, index) => (
+                          <motion.div
+                            key={image.id}
+                            layout
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.8 }}
+                            transition={{ delay: index * 0.05 }}
+                            whileHover={{ y: -5 }}
+                          >
+                            <Card className="glass-card interactive-card overflow-hidden">
+                              <div className="relative">
+                                <div className="aspect-square overflow-hidden">
+                                  <motion.img
+                                    src={image.image}
+                                    alt={`Progress vom ${image.date}`}
+                                    className="w-full h-full object-cover cursor-pointer"
+                                    onClick={() => openImageFullscreen(image)}
+                                    whileHover={{ scale: 1.05 }}
+                                    transition={{ duration: 0.2 }}
+                                  />
+                                </div>
+                                
+                                {/* Overlay Controls */}
+                                <div className="absolute top-2 right-2 flex gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => toggleFavorite(image.id)}
+                                    className={`h-8 w-8 rounded-full glass-card ${
+                                      image.isFavorite 
+                                        ? 'text-red-400 bg-red-400/20' 
+                                        : 'text-white/70 hover:text-red-400'
+                                    }`}
+                                  >
+                                    <HeartIcon className={`h-4 w-4 ${image.isFavorite ? 'fill-current' : ''}`} />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => deleteImage(image.id)}
+                                    className="h-8 w-8 rounded-full glass-card text-white/70 hover:text-red-400 hover:bg-red-400/20"
+                                  >
+                                    <TrashIcon className="h-4 w-4" />
+                                  </Button>
+                                </div>
+
+                                {/* Date Badge */}
+                                <div className="absolute bottom-2 left-2">
+                                  <div className="glass-card px-2 py-1 rounded-full text-xs text-white/90">
+                                    {format(new Date(image.date), "dd.MM.yyyy", { locale: de })}
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {image.notes && (
+                                <CardContent className="p-3">
+                                  <p className="text-sm text-muted-foreground line-clamp-2">
+                                    {image.notes}
+                                  </p>
+                                </CardContent>
+                              )}
+                            </Card>
+                          </motion.div>
+                        ))
+                      }
+                    </AnimatePresence>
                   </div>
-                )}
-                
-                {image.notes && (
-                  <p className="text-sm text-muted-foreground">{image.notes}</p>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                </motion.div>
+              ))
+            }
+          </AnimatePresence>
         </div>
       )}
-    </div>
+
+      {/* Fullscreen Image Modal */}
+      <AnimatePresence>
+        {selectedImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center"
+            onClick={closeFullscreen}
+          >
+            <div className="relative max-w-screen-lg max-h-screen-lg w-full h-full flex items-center justify-center p-4">
+              {/* Close Button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={closeFullscreen}
+                className="absolute top-4 right-4 z-10 bg-black/50 hover:bg-black/70 text-white"
+              >
+                <XIcon className="h-6 w-6" />
+              </Button>
+
+              {/* Navigation Buttons */}
+              {filteredImages.length > 1 && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigateImage('prev');
+                    }}
+                    className="absolute left-4 top-1/2 transform -translate-y-1/2 z-10 bg-black/50 hover:bg-black/70 text-white"
+                  >
+                    <ChevronLeftIcon className="h-6 w-6" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigateImage('next');
+                    }}
+                    className="absolute right-4 top-1/2 transform -translate-y-1/2 z-10 bg-black/50 hover:bg-black/70 text-white"
+                  >
+                    <ChevronRightIcon className="h-6 w-6" />
+                  </Button>
+                </>
+              )}
+
+              {/* Image */}
+              <motion.img
+                src={selectedImage.image}
+                alt={`Progress vom ${selectedImage.date}`}
+                className="max-w-full max-h-full object-contain"
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.3 }}
+                onClick={(e) => e.stopPropagation()}
+              />
+
+              {/* Image Info */}
+              <div className="absolute bottom-4 left-4 right-4 bg-black/70 rounded-lg p-4 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-medium">
+                      {format(new Date(selectedImage.date), "dd.MM.yyyy", { locale: de })} • {selectedImage.time}
+                    </h3>
+                    {selectedImage.notes && (
+                      <p className="text-sm text-white/80 mt-1">{selectedImage.notes}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedImage.isFavorite && (
+                      <HeartIcon className="h-5 w-5 text-red-400 fill-current" />
+                    )}
+                    <span className="text-sm text-white/60">
+                      {(selectedImageIndex || 0) + 1} / {filteredImages.length}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 };
 
