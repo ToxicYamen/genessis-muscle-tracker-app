@@ -6,11 +6,14 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { ChevronLeft, ChevronRight, Target, TrendingUp, Calendar, Utensils, Pill, CheckCircle, Circle, Image } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import { storageService, BodyMeasurement, ProgressImage, HabitData, NutritionData, SupplementData, StrengthData, AdvancedSupplementsSettings } from "@/services/storageService";
+import { supabaseStorageService } from "@/services/supabaseStorageService";
+import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 
 const Dashboard = () => {
   const { height, weight, bodyFat } = useStore();
+  const { user } = useSupabaseAuth();
   const [supplements, setSupplements] = useState<SupplementData[]>([]);
   const [habits, setHabits] = useState<HabitData[]>([]);
   const [bodyMeasurements, setBodyMeasurements] = useState<BodyMeasurement[]>([]);
@@ -112,51 +115,152 @@ const Dashboard = () => {
 
   // Refresh data when component mounts or when data changes
   useEffect(() => {
-    loadData();
-    
-    // Listen for strength data updates
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'genesis4_strength' || !e.key) {
-        console.log('Strength data changed, refreshing...');
-        const updatedData = storageService.getStrengthData();
-        console.log('Updated strength data:', updatedData);
-        setStrengthData(updatedData);
-      }
-    };
-    
-    // Add event listener for storage changes
-    window.addEventListener('storage', handleStorageChange);
-    
-    // Clean up event listener
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, []);
+    if (user) {
+      loadData();
+    }
+  }, [user]);
 
 
-  const loadData = () => {
-    const supplementData = storageService.getSupplements();
-    console.log('All supplements:', supplementData);
-    console.log('Number of supplements:', supplementData.length);
-    supplementData.forEach(sup => console.log(sup.name, sup.category));
-    
-    const habitData = storageService.getHabits();
-    const measurementData = storageService.getBodyMeasurements();
-    const imageData = storageService.getProgressImages();
-    const strengthEntries = storageService.getStrengthData();
-    const advancedSupplementsSettings = storageService.getAdvancedSupplementsSettings();
-    const today = format(new Date(), 'yyyy-MM-dd');
-    const nutritionData = storageService.getNutrition(today);
-    
-    console.log('Loaded strength entries:', strengthEntries);
-    
-    setSupplements(supplementData);
-    setHabits(habitData);
-    setBodyMeasurements(measurementData);
-    setProgressImages(imageData);
-    setStrengthData(strengthEntries);
-    setAdvancedSettings(advancedSupplementsSettings);
-    setNutrition(nutritionData);
+  const loadData = async () => {
+    try {
+      // Load data from Supabase
+      const [
+        bodyMeasurementsData,
+        habitsData,
+        habitCompletionsData,
+        supplementsData,
+        supplementCompletionsData,
+        progressImagesData,
+        strengthData,
+        nutritionData
+      ] = await Promise.all([
+        supabaseStorageService.getBodyMeasurements(),
+        supabaseStorageService.getHabits(),
+        supabaseStorageService.getHabitCompletions(),
+        supabaseStorageService.getSupplements(),
+        supabaseStorageService.getSupplementCompletions(),
+        supabaseStorageService.getProgressImages(),
+        supabaseStorageService.getStrengthRecords(),
+        supabaseStorageService.getNutritionRecords()
+      ]);
+
+      // Convert body measurements to local format
+      const convertedMeasurements = bodyMeasurementsData.map(item => ({
+        id: item.id,
+        date: item.date,
+        weight: item.weight || 0,
+        height: item.height || 186,
+        bodyFat: item.body_fat || 0,
+        muscleMass: item.muscle_mass || 0
+      }));
+
+      // Convert habits to local format with completion data
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const convertedHabits = habitsData.map(habit => {
+        const completions = habitCompletionsData.filter(c => c.habit_id === habit.id);
+        const dates: Record<string, number> = {};
+        completions.forEach(completion => {
+          dates[completion.date] = completion.count || 1;
+        });
+        
+        return {
+          id: habit.id,
+          name: habit.name,
+          icon: habit.icon,
+          description: habit.description || '',
+          target: habit.target,
+          completed: completions.find(c => c.date === today)?.count || 0,
+          streak: 0, // Calculate streak if needed
+          dates,
+          completedDates: completions.map(c => c.date)
+        };
+      });
+
+      // Convert supplements to local format with completion data
+      const convertedSupplements = supplementsData.map(supplement => {
+        const completions = supplementCompletionsData.filter(c => c.supplement_id === supplement.id);
+        const taken: { [key: string]: boolean } = {};
+        completions.forEach(completion => {
+          taken[completion.date] = completion.taken || false;
+        });
+        
+        return {
+          id: supplement.id,
+          name: supplement.name,
+          dosage: supplement.dosage,
+          timing: supplement.timing,
+          category: supplement.category as 'basic' | 'performance' | 'health' | 'recovery' | 'advanced',
+          icon: supplement.icon,
+          color: supplement.color,
+          taken
+        };
+      });
+
+      // Convert progress images to local format
+      const convertedImages = progressImagesData.map(image => ({
+        id: image.id,
+        date: image.date,
+        time: image.time,
+        image: image.image_url,
+        isFavorite: image.is_favorite || false,
+        notes: image.notes || '',
+        tags: image.tags || []
+      }));
+
+      // Convert strength data to local format  
+      const convertedStrength = strengthData.map(record => ({
+        id: record.id,
+        date: record.date,
+        exercise: record.exercise,
+        sets: record.sets,
+        reps: record.reps,
+        weight: record.weight,
+        notes: record.notes || ''
+      }));
+
+      // Get today's nutrition data
+      const todayNutrition = nutritionData.find(n => n.date === today);
+      const convertedNutrition = {
+        calories: todayNutrition?.calories || 0,
+        protein: todayNutrition?.protein || 0,
+        water: todayNutrition?.water || 0,
+        targetCalories: todayNutrition?.target_calories || 4864,
+        targetProtein: todayNutrition?.target_protein || 280,
+        targetWater: todayNutrition?.target_water || 4000
+      };
+
+      // Update state
+      setBodyMeasurements(convertedMeasurements);
+      setHabits(convertedHabits);
+      setSupplements(convertedSupplements);
+      setProgressImages(convertedImages);
+      setStrengthData(convertedStrength);
+      setNutrition(convertedNutrition);
+      
+      // Keep local storage for advanced settings (not in database yet)
+      const advancedSupplementsSettings = storageService.getAdvancedSupplementsSettings();
+      setAdvancedSettings(advancedSupplementsSettings);
+
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+      // Fallback to localStorage on error
+      const supplementData = storageService.getSupplements();
+      const habitData = storageService.getHabits();
+      const measurementData = storageService.getBodyMeasurements();
+      const imageData = storageService.getProgressImages();
+      const strengthEntries = storageService.getStrengthData();
+      const advancedSupplementsSettings = storageService.getAdvancedSupplementsSettings();
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const nutritionData = storageService.getNutrition(today);
+      
+      setSupplements(supplementData);
+      setHabits(habitData);
+      setBodyMeasurements(measurementData);
+      setProgressImages(imageData);
+      setStrengthData(strengthEntries);
+      setAdvancedSettings(advancedSupplementsSettings);
+      setNutrition(nutritionData);
+    }
   };
 
   // Time-based greeting
@@ -225,16 +329,10 @@ const Dashboard = () => {
     date?: string;
   }
 
-  // Get strength data directly from StrengthTracking
+  // Get strength data from state (loaded from Supabase)
   const getStrengthData = (): ExerciseWithDate[] => {
     try {
-      // Get all strength entries from storage
-      const allEntries = storageService.getStrengthData();
-      
-      console.log('All strength entries from storage:', allEntries);
-      
-      if (!allEntries || allEntries.length === 0) {
-        console.log('No strength entries found in storage');
+      if (!strengthData || strengthData.length === 0) {
         return [];
       }
       
@@ -242,7 +340,7 @@ const Dashboard = () => {
       const exerciseMap = new Map<string, {weight: number, date: string}>();
       
       // Process each entry and keep only the latest one per exercise
-      allEntries.forEach(entry => {
+      strengthData.forEach(entry => {
         if (!entry || !entry.exercise) return;
         
         const exerciseName = entry.exercise.trim();
@@ -257,21 +355,16 @@ const Dashboard = () => {
         }
       });
       
-      console.log('Processed exercise map:', Array.from(exerciseMap.entries()));
-      
       // Convert map to array and sort by exercise name for consistent order
-      const result = Array.from(exerciseMap.entries())
+      return Array.from(exerciseMap.entries())
         .map(([exercise, data]) => ({
           exercise,
           weight: data.weight,
           date: data.date
         }))
         .sort((a, b) => a.exercise.localeCompare(b.exercise));
-      
-      console.log('Final result:', result);
-      return result;
     } catch (error) {
-      console.error('Error loading strength data:', error);
+      console.error('Error processing strength data:', error);
       return [];
     }
   };
