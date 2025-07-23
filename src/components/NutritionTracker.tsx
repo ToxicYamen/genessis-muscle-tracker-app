@@ -7,10 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Plus, Utensils } from "lucide-react";
 import { storageService, NutritionData } from "@/services/storageService";
+import { supabaseStorageService } from "@/services/supabaseStorageService";
+import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
 import { toast } from "@/components/ui/use-toast";
 import { format } from "date-fns";
 
 const NutritionTracker = () => {
+  const { user } = useSupabaseAuth();
   const [nutrition, setNutrition] = useState<NutritionData>({
     calories: 0,
     protein: 0,
@@ -25,37 +28,107 @@ const NutritionTracker = () => {
   const today = format(new Date(), 'yyyy-MM-dd');
 
   useEffect(() => {
-    loadNutrition();
-  }, []);
-
-  const loadNutrition = () => {
-    const data = storageService.getNutrition(today);
-    setNutrition(data);
-  };
-
-  const addCalories = () => {
-    if (calorieInput && !isNaN(Number(calorieInput))) {
-      const amount = Number(calorieInput);
-      storageService.addNutritionValue(today, 'calories', amount);
-      setCalorieInput("");
+    if (user) {
       loadNutrition();
-      toast({
-        title: "Kalorien hinzugefügt",
-        description: `${amount} kcal wurden hinzugefügt.`,
+    }
+  }, [user]);
+
+  const loadNutrition = async () => {
+    try {
+      const nutritionData = await supabaseStorageService.getNutritionRecords();
+      const todayNutrition = nutritionData.find(n => n.date === today);
+      
+      setNutrition({
+        calories: todayNutrition?.calories || 0,
+        protein: todayNutrition?.protein || 0,
+        water: todayNutrition?.water || 0,
+        targetCalories: todayNutrition?.target_calories || 4864,
+        targetProtein: todayNutrition?.target_protein || 280,
+        targetWater: todayNutrition?.target_water || 4000
       });
+    } catch (error) {
+      console.error('Error loading nutrition:', error);
+      // Fallback to localStorage
+      const data = storageService.getNutrition(today);
+      setNutrition(data);
     }
   };
 
-  const addProtein = () => {
+  const addCalories = async () => {
+    if (calorieInput && !isNaN(Number(calorieInput))) {
+      const amount = Number(calorieInput);
+      try {
+        const currentNutrition = {
+          date: today,
+          calories: nutrition.calories + amount,
+          protein: nutrition.protein,
+          water: nutrition.water,
+          target_calories: nutrition.targetCalories,
+          target_protein: nutrition.targetProtein,
+          target_water: nutrition.targetWater
+        };
+        
+        await supabaseStorageService.saveNutritionRecords([currentNutrition]);
+        setCalorieInput("");
+        await loadNutrition();
+        
+        // Trigger dashboard update
+        window.dispatchEvent(new CustomEvent('nutritionUpdate'));
+        
+        toast({
+          title: "Kalorien hinzugefügt",
+          description: `${amount} kcal wurden hinzugefügt.`,
+        });
+      } catch (error) {
+        console.error('Error saving calories:', error);
+        // Fallback to localStorage
+        storageService.addNutritionValue(today, 'calories', amount);
+        setCalorieInput("");
+        loadNutrition();
+        toast({
+          title: "Kalorien hinzugefügt",
+          description: `${amount} kcal wurden hinzugefügt.`,
+        });
+      }
+    }
+  };
+
+  const addProtein = async () => {
     if (proteinInput && !isNaN(Number(proteinInput))) {
       const amount = Number(proteinInput);
-      storageService.addNutritionValue(today, 'protein', amount);
-      setProteinInput("");
-      loadNutrition();
-      toast({
-        title: "Protein hinzugefügt",
-        description: `${amount}g Protein wurden hinzugefügt.`,
-      });
+      try {
+        const currentNutrition = {
+          date: today,
+          calories: nutrition.calories,
+          protein: nutrition.protein + amount,
+          water: nutrition.water,
+          target_calories: nutrition.targetCalories,
+          target_protein: nutrition.targetProtein,
+          target_water: nutrition.targetWater
+        };
+        
+        await supabaseStorageService.saveNutritionRecords([currentNutrition]);
+        setProteinInput("");
+        await loadNutrition();
+        
+        // Trigger dashboard update
+        window.dispatchEvent(new CustomEvent('nutritionUpdate'));
+        
+        toast({
+          title: "Protein hinzugefügt",
+          description: `${amount}g Protein wurden hinzugefügt.`,
+        });
+      } catch (error) {
+        console.error('Error saving protein:', error);
+        // Fallback to localStorage
+        storageService.addNutritionValue(today, 'protein', amount);
+        setProteinInput("");
+        loadNutrition();
+        toast({
+          title: "Protein hinzugefügt",
+          description: `${amount}g Protein wurden hinzugefügt.`,
+        });
+      }
     }
   };
 

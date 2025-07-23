@@ -103,6 +103,9 @@ const BodyTracking = () => {
       
       await loadMeasurements();
 
+      // Trigger dashboard update
+      window.dispatchEvent(new CustomEvent('bodyMeasurementUpdate'));
+
       setNewMeasurement({
         weight: "",
         height: "186",

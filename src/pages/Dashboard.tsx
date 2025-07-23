@@ -118,6 +118,28 @@ const Dashboard = () => {
     if (user) {
       loadData();
     }
+
+    // Listen for body measurement updates
+    const handleBodyMeasurementUpdate = () => {
+      if (user) {
+        loadData();
+      }
+    };
+
+    // Listen for nutrition updates
+    const handleNutritionUpdate = () => {
+      if (user) {
+        loadData();
+      }
+    };
+
+    window.addEventListener('bodyMeasurementUpdate', handleBodyMeasurementUpdate);
+    window.addEventListener('nutritionUpdate', handleNutritionUpdate);
+
+    return () => {
+      window.removeEventListener('bodyMeasurementUpdate', handleBodyMeasurementUpdate);
+      window.removeEventListener('nutritionUpdate', handleNutritionUpdate);
+    };
   }, [user]);
 
 
