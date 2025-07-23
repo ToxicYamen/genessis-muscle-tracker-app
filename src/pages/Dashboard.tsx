@@ -386,24 +386,40 @@ const Dashboard = () => {
         <Card className="glass-card p-3 sm:p-4">
           <div className="flex flex-col">
             <div className="text-xs sm:text-sm text-muted-foreground">Gewicht</div>
-            <div className="text-lg sm:text-2xl font-bold text-primary">{weight || 75} kg</div>
-            <div className="text-xs text-green-400">+{weight ? (weight - 75).toFixed(1) : '0'} kg</div>
+            <div className="text-lg sm:text-2xl font-bold text-primary">
+              {bodyMeasurements.length > 0 ? bodyMeasurements[bodyMeasurements.length - 1].weight : weight || 75} kg
+            </div>
+            <div className="text-xs text-green-400">
+              +{bodyMeasurements.length > 0 ? 
+                (bodyMeasurements[bodyMeasurements.length - 1].weight - 75).toFixed(1) : 
+                (weight ? (weight - 75).toFixed(1) : '0')} kg
+            </div>
           </div>
         </Card>
 
         <Card className="glass-card p-3 sm:p-4">
           <div className="flex flex-col">
             <div className="text-xs sm:text-sm text-muted-foreground">Körperfett</div>
-            <div className="text-lg sm:text-2xl font-bold text-orange-400">{bodyFat || 12}%</div>
+            <div className="text-lg sm:text-2xl font-bold text-orange-400">
+              {bodyMeasurements.length > 0 ? bodyMeasurements[bodyMeasurements.length - 1].bodyFat : bodyFat || 12}%
+            </div>
             <div className="text-xs text-muted-foreground">Ziel: 8%</div>
           </div>
         </Card>
 
         <Card className="glass-card p-3 sm:p-4">
           <div className="flex flex-col">
-            <div className="text-xs sm:text-sm text-muted-foreground">Fortschritt</div>
-            <div className="text-lg sm:text-2xl font-bold text-green-400">{getTransformationProgress().toFixed(0)}%</div>
-            <div className="text-xs text-muted-foreground">von 4 Jahren</div>
+            <div className="text-xs sm:text-sm text-muted-foreground">Fortschritt zu 90kg</div>
+            <div className="text-lg sm:text-2xl font-bold text-green-400">
+              {(() => {
+                const currentWeight = bodyMeasurements.length > 0 ? 
+                  bodyMeasurements[bodyMeasurements.length - 1].weight : 
+                  weight || 75;
+                const progress = ((currentWeight - 75) / (90 - 75)) * 100;
+                return Math.min(100, Math.max(0, progress)).toFixed(0);
+              })()}%
+            </div>
+            <div className="text-xs text-muted-foreground">von 75kg → 90kg</div>
           </div>
         </Card>
 

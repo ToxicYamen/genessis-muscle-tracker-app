@@ -128,8 +128,7 @@ const BodyTracking = () => {
 
   const deleteMeasurement = async (id: string) => {
     try {
-      // Note: You'll need to add a delete method to supabaseStorageService
-      // For now, we'll reload the data
+      await supabaseStorageService.deleteBodyMeasurement(id);
       await loadMeasurements();
       
       toast({

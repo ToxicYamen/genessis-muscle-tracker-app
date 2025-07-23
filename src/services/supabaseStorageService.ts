@@ -295,6 +295,20 @@ export const supabaseStorageService = {
     return data || [];
   },
 
+  async deleteBodyMeasurement(id: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { error } = await supabase
+      .from('body_measurements')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+    return true;
+  },
+
   // Habit Completions
   async saveHabitCompletions(completions: any[]) {
     const { data: { user } } = await supabase.auth.getUser();
